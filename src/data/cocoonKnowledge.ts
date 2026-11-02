@@ -28,6 +28,12 @@ const channels = [
   { name: 'Search ads', sample: 38, churn: '34,2%', churned: 13 },
 ];
 
+const reportedQuarterlyNewCustomers = [
+  ['Q4/2023', 19], ['Q1/2024', 28], ['Q2/2024', 23], ['Q3/2024', 24],
+  ['Q4/2024', 18], ['Q1/2025', 21], ['Q2/2025', 26], ['Q3/2025', 29],
+  ['Q4/2025', 39], ['Q1/2026', 21], ['Q2/2026', 25], ['Q3/2026', 27],
+] as const;
+
 const channelProductMatrix = [
   { channel: 'Marketplace', values: [14, 10, 6, 2, 13, 3, 10, 8] },
   { channel: 'Instagram', values: [7, 14, 6, 4, 10, 7, 10, 1] },
@@ -123,10 +129,13 @@ function channelProductAnswer(query: string): GroundedAnswer | null {
 }
 
 function channelChurnAnswer(query: string): GroundedAnswer {
-  const channel = channels.find((item) => query.includes(normalize(item.name)));
-  if (channel) {
+  const mentionedChannels = channels.filter((item) => query.includes(normalize(item.name)));
+  if (mentionedChannels.length > 0) {
+    const detail = mentionedChannels
+      .map((channel) => `${channel.name}: ${channel.churn} (${channel.churned}/${channel.sample} khách)`)
+      .join('; ');
     return {
-      text: `${channel.name}: ${channel.churn} (${channel.churned}/${channel.sample} khách). Tỷ lệ toàn bộ bảng sạch là 136/300 = 45,3%.`,
+      text: `${detail}. Tỷ lệ toàn bộ bảng sạch là 136/300 = 45,3%.`,
       sources: [sources.cleanedCustomers, sources.report],
     };
   }
@@ -140,7 +149,7 @@ function channelChurnAnswer(query: string): GroundedAnswer {
 
 function tierAnswer(): GroundedAnswer {
   return {
-    text: 'CLV trung vị theo hạng trong bảng sạch: Member 0,4025 triệu đồng (n=104), Bronze 1,271 triệu (n=98), Silver 2,6045 triệu (n=74), Gold 4,626 triệu (n=24). Có 12/24 khách Gold được đánh dấu rời bỏ (50%).',
+    text: 'Trong bảng sạch, theo thứ tự Member / Bronze / Silver / Gold: số khách là 104 / 98 / 74 / 24; tỷ lệ churn là 72/104 (69,2%) / 29/98 (29,6%) / 23/74 (31,1%) / 12/24 (50%). CLV trung bình tương ứng là 657.702 / 1.429.398 / 2.626.095 / 4.981.333 đồng; CLV trung vị là 402.500 / 1.271.000 / 2.604.500 / 4.626.000 đồng. Đây là thống kê mô tả trên bộ dữ liệu mô phỏng.',
     sources: [sources.cleanedCustomers, sources.report],
   };
 }
@@ -153,19 +162,41 @@ function subscriptionAnswer(): GroundedAnswer {
   };
 }
 
+function favoriteCategoryAnswer(): GroundedAnswer {
+  const totals = productColumns
+    .map((product, index) => ({
+      name: product.name,
+      customers: channelProductMatrix.reduce((sum, channel) => sum + channel.values[index], 0),
+    }))
+    .sort((a, b) => b.customers - a.customers);
+  const sampleSize = totals.reduce((sum, item) => sum + item.customers, 0);
+  const leaders = totals.slice(0, 3).map((item) =>
+    `${item.name} ${item.customers}/${sampleSize} (${(item.customers / sampleSize * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%)`,
+  );
+
+  return {
+    text: `Cộng ma trận 7 kênh × 8 nhóm yêu thích: ${leaders.join('; ')}. Đây là số khách chọn nhóm yêu thích, không phải doanh số; dashboard và Q&A có tỷ trọng doanh số chưa được đối soát với workbook.`,
+    sources: [sources.cleanedCustomers, sources.dashboard, sources.qaPage2],
+    hasCaveat: true,
+  };
+}
+
 export function answerCocoonQuestion(input: string): GroundedAnswer {
   const query = normalize(input);
   const asksDataProvenance = hasAny(query, ['du lieu thuc te', 'du lieu that', 'khach hang that', 'synthetic', 'fictional', 'du lieu gia lap', 'nguon du lieu']);
-  const asksLoss = hasAny(query, ['thiet hai', 'mat bao nhieu', 'that thoat', 'doanh thu mat', 'mat doanh thu', '55 56']);
-  const asksSubscription = hasAny(query, ['subscription', 'dang ky dinh ky', 'goi dang ky', 'hoi vien']);
+  const asksLoss = hasAny(query, ['thiet hai', 'mat bao nhieu', 'that thoat', 'doanh thu mat', 'mat doanh thu', '55 56', 'tong clv gold roi']);
+  const asksSubscription = hasAny(query, ['subscription', 'dang ky dinh ky', 'goi dang ky']);
   const asksChurn = hasAny(query, ['churn', 'roi bo', 'ty le roi', 'ty le churn']);
   const asksThreshold = hasAny(query, ['180 ngay', 'nguong churn', 'moc churn', 'tieu chi churn', 'dinh nghia churn', 'bao lau khong mua']);
   const asksChannelProduct = hasAny(query, ['kenh', 'marketplace', 'instagram', 'tiktok', 'referral', 'search ads', 'in store', 'influencer']) &&
-    hasAny(query, ['san pham', 'nhom', 'duong the', 'sua rua mat', 'duong moi', 'mat na', 'kem duong', 'serum', 'chong nang', 'toner', 'heatmap']);
+    hasAny(query, ['san pham', 'product', 'nhom', 'category', 'danh muc', 'duong the', 'sua rua mat', 'duong moi', 'mat na', 'kem duong', 'serum', 'chong nang', 'toner', 'heatmap']);
+  const asksWhy = hasAny(query, ['tai sao', 'vi sao', 'nguyen nhan', 'why', 'cause', 'ly do']);
+  const asksFavoriteCategory = hasAny(query, ['ua chuong', 'yeu thich', 'pho bien', 'popular', 'favorite', 'nhieu nhat']) &&
+    hasAny(query, ['san pham', 'product', 'nhom', 'category', 'danh muc']);
 
   if (asksDataProvenance) {
     return {
-      text: 'Tệp Data Dictionary trong bảng sạch ghi rõ dữ liệu là synthetic (fictional), dùng cho thực hành và có mốc tham chiếu 31/10/2026. Dashboard HTML lại gọi đây là dữ liệu thực tế. Vì hai nguồn mâu thuẫn, chatbot xem các kết quả là dữ liệu mô phỏng của bài tập, không xác nhận là hồ sơ khách hàng thật của Cocoon.',
+      text: 'Data Dictionary của workbook ghi rõ bộ dữ liệu là synthetic (fictional), dùng cho thực hành, với ngày tham chiếu 31/10/2026. Vì vậy, các kết quả trong bài nên được hiểu là phân tích trên dữ liệu mô phỏng, không xác nhận đây là hồ sơ khách hàng thật của Cocoon.',
       sources: [sources.cleanedCustomers, sources.dashboard],
       hasCaveat: true,
     };
@@ -173,7 +204,7 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
 
   if (asksLoss && hasAny(query, ['gold'])) {
     return {
-      text: 'Q&A nêu ước tính khoảng 55,56 triệu đồng, được tính bằng 12 khách rời bỏ × CLV trung vị Gold 4,63 triệu đồng. Trong bảng sạch, tổng CLV của 12 khách Gold bị đánh dấu rời bỏ là 46,908 triệu đồng. Vì vậy 55,56 triệu là phép ước tính trong Q&A, không phải tổng doanh thu mất được đối chiếu trực tiếp từ bảng.',
+      text: 'Q&A ước tính 55,56 triệu đồng bằng 12 khách Gold churn × trung vị Gold đã làm tròn 4,63 triệu. Cộng CLV của đúng 12 bản ghi Gold churn trong workbook được 46,908 triệu đồng. Đây đều là phép quy đổi CLV, không phải doanh thu mất được quan sát trực tiếp; workbook cũng ghi dữ liệu là mô phỏng.',
       sources: [sources.qaPage2, sources.cleanedCustomers],
       hasCaveat: true,
     };
@@ -181,12 +212,42 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
 
   if (asksSubscription) return subscriptionAnswer();
 
+  if (asksFavoriteCategory && !channelProductMatrix.some((item) => query.includes(normalize(item.channel)))) {
+    return favoriteCategoryAnswer();
+  }
+
   if (asksChannelProduct) {
     const answer = channelProductAnswer(query);
     if (answer) return answer;
     return {
       text: 'Ma trận kênh × nhóm sản phẩm trong tài liệu có 7 kênh và 8 nhóm. Hãy hỏi rõ một kênh cùng một nhóm sản phẩm, ví dụ “Marketplace có bao nhiêu khách Dưỡng thể?”.',
       sources: [sources.cleanedCustomers, sources.dashboard],
+    };
+  }
+
+  if (hasAny(query, ['canh bao', 'vip care', 'crm', 'giu chan']) &&
+    hasAny(query, ['gold', 'silver', 'khach hang'])) {
+    return {
+      text: 'Tài liệu đưa ra hai mốc khuyến nghị khác nhau: PDF đề xuất VIP Care khi Gold/Silver chưa mua 120–150 ngày; câu hỏi nhóm đề xuất theo dõi Gold từ 60 ngày. Đây là ngưỡng đề xuất, chưa được thử nghiệm trên kết quả giữ chân. Quy tắc churn của workbook vẫn là không mua hơn 180 ngày (>180).',
+      sources: [sources.qaPage2, sources.report, sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+
+  if (hasAny(query, ['cross sell', 'cross-sell', 'combo', 'ban kem', 'mua kem', 'ban them'])) {
+    return {
+      text: 'Q&A gợi ý thử combo Sữa rửa mặt + Kem dưỡng hoặc Dưỡng thể + Serum, và sample sản phẩm bổ trợ cho đơn Dưỡng thể/Sữa rửa mặt. Đây là giả thuyết tiếp thị: bảng chỉ ghi nhóm sản phẩm yêu thích, không có dữ liệu giỏ hàng để xác nhận khách thực sự mua chéo. Các tỷ trọng doanh số trong Q&A/dashboard cũng chưa đối soát được với workbook.',
+      sources: [sources.qaPage2, sources.cleanedCustomers, sources.dashboard],
+      hasCaveat: true,
+    };
+  }
+
+  if (hasAny(query, ['tren 180', 'hon 180', 'qua 180', 'sau 180']) &&
+    hasAny(query, ['duoi 90', 'it hon 90', 'chua den 90'])) {
+    return {
+      text: 'Tính từ workbook: CLV trung bình của 136 khách không mua trên 180 ngày là 1.009.846 đồng; ở 102 khách có Recency dưới 90 ngày là 2.294.353 đồng. Nhóm trên 180 ngày thấp hơn khoảng 56%. Đây là so sánh mô tả, không chứng minh quan hệ nhân quả; Q&A ghi một ước tính khác (0,5 so với 2,5 triệu; thấp hơn 70–80%).',
+      sources: [sources.cleanedCustomers, sources.qaPage2],
+      hasCaveat: true,
     };
   }
 
@@ -198,26 +259,79 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
     };
   }
 
-  if (hasAny(query, ['khach moi', 'tang truong']) ||
-    (hasAny(query, ['q4']) && hasAny(query, ['khach', 'customer', 'tang']) && !asksChurn)) {
+  if (hasAny(query, ['recency', 'tu lan mua cuoi']) &&
+    hasAny(query, ['trung binh', 'trung vi', 'mean', 'average', 'bao nhieu ngay'])) {
+    if (hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien'])) {
+      return {
+        text: 'Recency trung bình theo hạng, tính từ workbook: Member 399,86 ngày (n=104), Bronze 182,22 (n=98), Silver 161,15 (n=74), Gold 185,21 (n=24). Đây là thống kê mô tả; mức trung bình của Member bị kéo lên bởi khách có Recency rất dài.',
+        sources: [sources.cleanedCustomers],
+      };
+    }
+    if (hasAny(query, ['churn', 'roi bo', 'da roi'])) {
+      return {
+        text: 'Trong workbook, 136 khách churn có Recency trung bình 462,60 ngày (trung vị 383,5); 164 khách còn active có trung bình 78,66 ngày (trung vị 71,5). Quy tắc phân loại được ghi là không mua hơn 180 ngày.',
+        sources: [sources.cleanedCustomers],
+      };
+    }
+    if (hasAny(query, ['active', 'hoat dong', 'con mua'])) {
+      return {
+        text: 'Tính trực tiếp từ bảng sạch: 164 khách còn hoạt động (churned = 0) có Recency trung bình 78,66 ngày và trung vị 71,5 ngày. Đây là thống kê mô tả của nhóm active trong bộ dữ liệu mô phỏng.',
+        sources: [sources.cleanedCustomers],
+      };
+    }
     return {
-      text: 'Tài liệu báo Q4/2025 có 39 khách mới. Con số 39 khớp với 39 ngày đăng ký trong bảng sạch; nếu đếm theo ngày mua đầu tiên thì bảng có 38. Tài liệu không ghi rõ trường ngày nào dùng cho biểu đồ, nên nên gọi đây là số khách mới theo báo cáo và lưu ý cách đếm.',
+      text: 'Tính trên toàn bộ 300 bản ghi trong workbook, Recency trung bình là 252,71 ngày và trung vị là 159 ngày. Hai thống kê gộp chịu ảnh hưởng bởi 136 khách được đánh dấu churn; nhóm active riêng có trung bình 78,66 ngày.',
+      sources: [sources.cleanedCustomers],
+    };
+  }
+
+  if (hasAny(query, ['khach moi', 'tang truong', 'new customer']) ||
+    (hasAny(query, ['q1', 'q2', 'q3', 'q4']) && hasAny(query, ['khach', 'customer', 'tang']) && !asksChurn)) {
+    if (hasAny(query, ['cao nhat', 'nhieu nhat', 'peak', 'highest'])) {
+      const [quarter, count] = reportedQuarterlyNewCustomers.reduce((top, item) => item[1] > top[1] ? item : top);
+      return {
+        text: `Cao nhất là ${quarter}: ${count} khách mới theo dashboard. Đây là đỉnh trong 12 quý được trình bày, không đủ để kết luận về chu kỳ tăng trưởng dài hạn.`,
+        sources: [sources.cleanedCustomers, sources.dashboard],
+      };
+    }
+    if (hasAny(query, ['thap nhat', 'it nhat', 'lowest'])) {
+      const [quarter, count] = reportedQuarterlyNewCustomers.reduce((bottom, item) => item[1] < bottom[1] ? item : bottom);
+      return {
+        text: `Thấp nhất là ${quarter}: ${count} khách mới theo dashboard trong 12 quý được trình bày.`,
+        sources: [sources.cleanedCustomers, sources.dashboard],
+      };
+    }
+    const quarterMatch = query.match(/\bq([1-4])\s*(20)?([2-6][0-9])\b/);
+    const selectedQuarter = quarterMatch
+      ? `Q${quarterMatch[1]}/${quarterMatch[3].length === 2 ? `20${quarterMatch[3]}` : quarterMatch[3]}`
+      : undefined;
+    const selectedCount = reportedQuarterlyNewCustomers.find(([quarter]) => quarter === selectedQuarter);
+    if (selectedCount) {
+      return {
+        text: `Dashboard ghi nhận ${selectedCount[1]} khách mới ở ${selectedCount[0]}. Chuỗi trên biểu đồ khớp với số ngày đăng ký theo quý trong workbook; nếu đếm theo ngày mua đầu tiên có thể khác, và dashboard không ghi rõ trường ngày dùng để lập biểu đồ.`,
+        sources: [sources.cleanedCustomers, sources.dashboard],
+        hasCaveat: true,
+      };
+    }
+    const quarterSummary = reportedQuarterlyNewCustomers.map(([quarter, count]) => `${quarter}: ${count}`).join('; ');
+    return {
+      text: `Số khách mới theo chuỗi quý trên dashboard: ${quarterSummary}. Đếm theo trường signup_date trong workbook khớp với chuỗi này. Dashboard không nói rõ trường ngày; riêng Q4/2025, đếm theo first_purchase_date được 38 thay vì 39.`,
       sources: [sources.cleanedCustomers, sources.dashboard, sources.shortDeck],
       hasCaveat: true,
     };
   }
 
   if (hasAny(query, ['ty trong doanh so', 'doanh so theo nhom', '22%', '18%', '40% doanh so', 'danh muc san pham']) ||
-    (hasAny(query, ['ty trong', 'bao nhieu phan tram', 'chiem bao nhieu']) &&
-      hasAny(query, ['duong the', 'sua rua mat', 'body care', 'cleanser']))) {
+    (hasAny(query, ['ty trong', 'phan tram', 'ty le', 'percentage', 'share']) &&
+      hasAny(query, ['duong the', 'sua rua mat', 'duong moi', 'mat na', 'kem duong', 'serum', 'chong nang', 'toner', 'body care', 'cleanser']))) {
     return {
-      text: 'Một số tài liệu ghi Dưỡng thể 22% và Sữa rửa mặt 18% doanh số. Bảng sạch không có doanh thu theo từng giao dịch/sản phẩm để kiểm tra các tỷ lệ này. Vì vậy, mình không thể xác nhận 22% và 18% từ bảng dữ liệu.',
+      text: 'Tỷ lệ hiển thị trên donut của dashboard: Dưỡng thể 22%, Sữa rửa mặt 18%, Dưỡng môi 14%, Mặt nạ 8%, Kem dưỡng 16%, Serum 7%, Chống nắng 10%, Toner 5%. Q&A ghi Serum 14% thay vì 7% (dashboard ghi Dưỡng môi 14%). Workbook không có doanh thu giao dịch theo sản phẩm để xác minh, nên đây là số hiển thị trong tài liệu, chưa được đối soát bằng dữ liệu gốc.',
       sources: [sources.cleanedCustomers, sources.qaPage2, sources.dashboard],
       hasCaveat: true,
     };
   }
 
-  if (hasAny(query, ['referral']) && hasAny(query, ['tai sao', 'vi sao', 'nguyen nhan', 'khuyen mai', 'voucher', 'khac phuc', 'giai phap'])) {
+  if (hasAny(query, ['referral']) && (asksWhy || hasAny(query, ['khuyen mai', 'voucher', 'khac phuc', 'giai phap']))) {
     return {
       text: 'Q&A đưa ra giả thuyết rằng voucher lớn cho đơn đầu có thể thu hút người mua vì ưu đãi ngắn hạn; nhóm đề xuất chuyển thưởng sang đơn thứ hai/tích điểm và rà lại chất lượng nguồn giới thiệu. Đây là phần diễn giải và khuyến nghị trong Q&A, không phải quan hệ nhân quả đã được kiểm định trong bảng khách hàng.',
       sources: [sources.qaPage1, sources.cleanedCustomers],
@@ -232,8 +346,26 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
     };
   }
 
-  if (hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien']) && hasAny(query, ['clv', 'trung vi', 'gia tri', 'khach'])) {
+  if (asksChurn && asksWhy && hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien'])) {
+    return {
+      text: 'Bảng sạch cho biết tỷ lệ churn theo hạng (Member 69,2%; Bronze 29,6%; Silver 31,1%; Gold 50%), nhưng không có biến giải thích nguyên nhân churn như lý do hủy, giá khuyến mãi hay lịch sử tương tác. Vì vậy có thể mô tả Gold có 12/24 khách churn, nhưng không thể kết luận vì sao từ các nguồn hiện có.',
+      sources: [sources.cleanedCustomers, sources.qaPage2],
+      hasCaveat: true,
+    };
+  }
+
+  if (hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien']) && hasAny(query, ['clv', 'trung vi', 'trung binh', 'mean', 'average', 'gia tri', 'khach'])) {
     return tierAnswer();
+  }
+
+  if (asksChurn && asksWhy) {
+    const answer = channelChurnAnswer(query);
+    const isSearch = hasAny(query, ['search ads', 'searchad']);
+    return {
+      text: `${answer.text} ${isSearch ? 'Q&A gợi ý Search Ads có thể tiếp cận người chủ động tìm giải pháp, nhưng đây là giả thuyết chưa được kiểm định.' : 'Bảng không có biến giải thích nguyên nhân theo kênh, nên không thể kết luận vì sao chỉ từ tỷ lệ churn.'}`,
+      sources: [...answer.sources, ...(isSearch ? [sources.qaPage1] : [])],
+      hasCaveat: true,
+    };
   }
 
   if (asksChurn && hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien'])) {
@@ -242,18 +374,18 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
 
   if (asksChurn) return channelChurnAnswer(query);
 
+  if (hasAny(query, ['recency', 'tu lan mua cuoi', 'tuong quan', 'nhan qua'])) {
+    return {
+      text: 'Tính trực tiếp từ hai cột days_since_last_order và clv_vnd của bảng sạch, tương quan Pearson xấp xỉ -0,46 (n=300). Đây là tương quan âm, không chứng minh ngày không mua gây ra CLV thấp. Scatter của dashboard HTML được tạo bằng Math.random(), nên các điểm trong đó không phải 300 quan sát thật từ workbook.',
+      sources: [sources.cleanedCustomers, sources.report, sources.dashboard],
+      hasCaveat: true,
+    };
+  }
+
   if (hasAny(query, ['clv', 'trung vi', 'trung binh', 'mean', 'median', 'le phai', 'ngoai lai'])) {
     return {
       text: 'Trong bảng sạch, CLV trung vị là 1.406.500 đồng (xấp xỉ 1,41 triệu) và trung bình là 1.741.217 đồng (xấp xỉ 1,74 triệu). Q&A mô tả phân phối lệch phải: một nhóm CLV cao kéo trung bình lên, vì vậy trung vị phù hợp hơn khi mô tả khách hàng điển hình.',
       sources: [sources.cleanedCustomers, sources.qaPage1, sources.report],
-    };
-  }
-
-  if (hasAny(query, ['recency', 'tu lan mua cuoi', 'tuong quan', 'nhan qua'])) {
-    return {
-      text: 'Tính trực tiếp từ hai cột days_since_last_order và clv_vnd của bảng sạch cho tương quan Pearson xấp xỉ -0,46. Đây là tương quan âm, không chứng minh ngày không mua gây ra CLV thấp. Riêng các điểm trong scatter của dashboard HTML được tạo bằng Math.random, nên không phải biểu đồ điểm từ 300 bản ghi.',
-      sources: [sources.cleanedCustomers, sources.report, sources.dashboard],
-      hasCaveat: true,
     };
   }
 

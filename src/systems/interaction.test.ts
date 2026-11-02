@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../config';
 import { HERO_BOOKS } from '../data/heroBooks';
+import { CURATED_COCOON_QA } from '../data/curatedCocoonQa';
+import { answerCocoonQuestion } from '../data/cocoonKnowledge';
 
 test('CONFIG parameters are mathematically sound and within physical bounds', () => {
   // Shelf dimensions
@@ -68,4 +70,56 @@ test('Trajectory math calculates valid quadratic Bezier interpolation', () => {
   assert.equal(bezier(0), 0);
   assert.equal(bezier(0.5), 0.5);
   assert.equal(bezier(1), 1);
+});
+
+test('Cocoon chatbot corpus has complete, unique, source-linked entries', () => {
+  assert.equal(CURATED_COCOON_QA.length, 35);
+  assert.equal(CURATED_COCOON_QA.filter((item) => item.sourceCollection === 'Q&A bảo vệ đồ án').length, 8);
+  assert.equal(new Set(CURATED_COCOON_QA.map((item) => item.id)).size, CURATED_COCOON_QA.length);
+  CURATED_COCOON_QA.forEach((item) => {
+    assert.ok(item.question.trim().length > 10, `Question ${item.id} is too short`);
+    assert.ok(item.answer.trim().length > 40, `Answer ${item.id} is too short`);
+    assert.ok(item.sources.length > 0, `Question ${item.id} has no source`);
+  });
+});
+
+test('Cocoon chatbot free questions answer from verified figures and flag source limits', () => {
+  const quarter = answerCocoonQuestion('Q4/25 có bao nhiêu khách mới?');
+  assert.match(quarter.text, /39 khách mới ở Q4\/2025/);
+  assert.equal(quarter.hasCaveat, true);
+
+  const channels = answerCocoonQuestion('So sánh tỷ lệ churn Referral và Search ads');
+  assert.match(channels.text, /Referral: 63,6% \(14\/22 khách\)/);
+  assert.match(channels.text, /Search ads: 34,2% \(13\/38 khách\)/);
+
+  const product = answerCocoonQuestion('Marketplace có bao nhiêu khách yêu thích Dưỡng thể?');
+  assert.match(product.text, /Marketplace 14 khách/);
+
+  const subscription = answerCocoonQuestion('15 hội viên subscription có thuộc Marketplace và Dưỡng thể?');
+  assert.match(subscription.text, /Chỉ 2 người/);
+  assert.equal(subscription.hasCaveat, true);
+
+  const favorite = answerCocoonQuestion('Nhóm sản phẩm nào được khách yêu thích nhất?');
+  assert.match(favorite.text, /Kem dưỡng 52\/300 \(17,3%\)/);
+  assert.match(favorite.text, /Sữa rửa mặt 48\/300 \(16%\)/);
+  assert.equal(favorite.hasCaveat, true);
+
+  const cause = answerCocoonQuestion('Vì sao tỷ lệ churn của khách Gold cao?');
+  assert.match(cause.text, /không thể kết luận vì sao/);
+  assert.match(cause.text, /Gold 50%/);
+  assert.equal(cause.hasCaveat, true);
+
+  const boundary = answerCocoonQuestion('Khách đúng 180 ngày có bị tính churn không?');
+  assert.match(boundary.text, /đúng 180 ngày nhưng chưa được đánh dấu churn/);
+
+  const clvConflict = CURATED_COCOON_QA.find((item) => item.id === 23);
+  assert.ok(clvConflict?.answer.includes('không có khách nào vượt 8,4 triệu'));
+
+  const productShareConflict = CURATED_COCOON_QA.find((item) => item.id === 33);
+  assert.ok(productShareConflict?.answer.includes('Serum 7%'));
+  assert.ok(productShareConflict?.answer.includes('Serum 14%'));
+
+  const unsupported = answerCocoonQuestion('Doanh thu Cocoon năm 2026 là bao nhiêu?');
+  assert.equal(unsupported.sources.length, 0);
+  assert.match(unsupported.text, /chưa khớp với nội dung đã đối chiếu/);
 });

@@ -22,6 +22,13 @@ const LEGACY_QUESTIONS = [
   { id: 'channels', label: 'Tỷ lệ churn của các kênh là bao nhiêu?', query: 'Tỷ lệ churn của từng kênh là bao nhiêu?' },
 ];
 
+const GROUP_DOCUMENT_QUESTIONS = CURATED_COCOON_QA.filter(
+  (item) => item.sourceCollection !== 'Q&A bảo vệ đồ án',
+);
+const DEFENSE_DOCUMENT_QUESTIONS = CURATED_COCOON_QA.filter(
+  (item) => item.sourceCollection === 'Q&A bảo vệ đồ án',
+);
+
 export function Chapter4Defense() {
   const [activeQuestion, setActiveQuestion] = useState<number>(1);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<number, boolean>>({});
@@ -29,16 +36,20 @@ export function Chapter4Defense() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: 'ai',
-      text: 'Mình tra cứu 27 câu hỏi đã đối chiếu cùng các chủ đề từ bộ tài liệu Cocoon ban đầu. Chọn câu hỏi có sẵn để xem câu trả lời và nguồn; mình không nhận nội dung nhập tự do.',
+      text: `Mình có ${GROUP_DOCUMENT_QUESTIONS.length} câu hỏi trong tài liệu nhóm, ${DEFENSE_DOCUMENT_QUESTIONS.length} câu trong Q&A và ${LEGACY_QUESTIONS.length} chủ đề kiểm chứng bổ sung. Bạn cũng có thể gõ câu hỏi liên quan; mình chỉ trả lời trong phạm vi các nguồn đã nạp và sẽ nêu rõ khi dữ liệu chưa đủ.`,
     },
   ]);
-  const [selectedQuestion, setSelectedQuestion] = useState('qa-1');
+  const [selectedQuestion, setSelectedQuestion] = useState('');
+  const [draftQuestion, setDraftQuestion] = useState('');
   const [chatLogRef, setChatLogRef] = useState<HTMLDivElement | null>(null);
 
   const currentQ = COLD_CALLING_QUESTIONS.find((q) => q.id === activeQuestion) || COLD_CALLING_QUESTIONS[0];
   const isRevealed = !!revealedAnswers[activeQuestion];
 
   const handleSendChat = () => {
+    const trimmedQuestion = draftQuestion.trim();
+    if (!trimmedQuestion) return;
+
     const curatedId = Number(selectedQuestion.replace('qa-', ''));
     const curated = selectedQuestion.startsWith('qa-')
       ? CURATED_COCOON_QA.find((item) => item.id === curatedId)
@@ -46,12 +57,12 @@ export function Chapter4Defense() {
     const legacy = selectedQuestion.startsWith('legacy-')
       ? LEGACY_QUESTIONS.find((item) => `legacy-${item.id}` === selectedQuestion)
       : undefined;
-    if (!curated && !legacy) return;
-
-    const userText = curated?.question ?? legacy!.label;
-    const answer = curated
+    const userText = trimmedQuestion;
+    const answer = selectedQuestion && curated
       ? { text: curated.answer, sources: curated.sources.map((label) => ({ label })), hasCaveat: curated.hasCaveat }
-      : answerCocoonQuestion(legacy!.query);
+      : selectedQuestion && legacy
+      ? answerCocoonQuestion(legacy.query)
+      : answerCocoonQuestion(trimmedQuestion);
     setChatMessages((prev) => [
       ...prev,
       { role: 'user', text: userText },
@@ -62,6 +73,8 @@ export function Chapter4Defense() {
         hasCaveat: answer.hasCaveat,
       },
     ]);
+    setDraftQuestion('');
+    setSelectedQuestion('');
   };
 
   React.useEffect(() => {
@@ -119,14 +132,14 @@ export function Chapter4Defense() {
 
             <div className="mb-4">
               <label className="block text-xs font-bold text-[#6B4C38] mb-1">
-                Ghi chú / Nháp câu trả lời của bạn:
+                Ghi chú luyện tập cá nhân (không gửi tới chatbot):
               </label>
               <textarea
                 value={userNotes[currentQ.id] || ''}
                 onChange={(e) =>
                   setUserNotes({ ...userNotes, [currentQ.id]: e.target.value })
                 }
-                placeholder="Nhập ý tưởng trả lời của bạn trước khi mở đáp án chuẩn..."
+                placeholder="Ghi ý tưởng tại đây; nội dung chỉ lưu trong phần luyện tập này..."
                 rows={3}
                 className="w-full p-3 rounded-xl border border-[#EFE6D5] bg-[#FAF6F0] text-xs text-[#3D2314] focus:outline-none focus:border-[#E69F00] resize-none"
               />
@@ -207,7 +220,7 @@ export function Chapter4Defense() {
               <span className="text-[11px] text-[#E5D9C5]">Tra cứu tại chỗ</span>
             </div>
 
-            <div ref={setChatLogRef} aria-live="polite" aria-relevant="additions" className="space-y-3 overflow-y-auto h-[350px] pr-2 text-sm">
+            <div ref={setChatLogRef} role="log" aria-label="Lịch sử trò chuyện Cocoon" aria-live="polite" aria-relevant="additions" className="space-y-3 overflow-y-auto h-[350px] pr-2 text-sm">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
@@ -217,6 +230,11 @@ export function Chapter4Defense() {
                       : 'bg-[#E69F00] text-[#3D2314] font-semibold ml-auto'
                   }`}
                 >
+                  {msg.role === 'ai' && msg.hasCaveat && (
+                    <span className="mb-1.5 inline-flex rounded-full border border-[#D9A441]/50 bg-[#4A321D] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F2C24B]">
+                      Cần đọc lưu ý nguồn
+                    </span>
+                  )}
                   <p className="break-words">{msg.text}</p>
                   {!!msg.sources?.length && (
                     <div className="mt-2 pt-2 border-t border-[#FAF6F0]/15 text-xs text-[#E8CFA8]">
@@ -233,36 +251,68 @@ export function Chapter4Defense() {
             onSubmit={(event) => { event.preventDefault(); handleSendChat(); }}
             className="pt-3 border-t border-[#4A2E1B]"
           >
-            <div className="flex gap-2">
+            <div>
               <select
                 value={selectedQuestion}
-                onChange={(event) => setSelectedQuestion(event.target.value)}
-                aria-label="Chọn câu hỏi trong tài liệu Cocoon"
+                onChange={(event) => {
+                  const selected = event.target.value;
+                  setSelectedQuestion(selected);
+                  const curatedItem = selected.startsWith('qa-')
+                    ? CURATED_COCOON_QA.find((item) => item.id === Number(selected.replace('qa-', '')))
+                    : undefined;
+                  const legacyItem = selected.startsWith('legacy-')
+                    ? LEGACY_QUESTIONS.find((item) => `legacy-${item.id}` === selected)
+                    : undefined;
+                  setDraftQuestion(curatedItem?.question ?? legacyItem?.label ?? '');
+                }}
+                aria-label="Chọn câu hỏi gợi ý về tài liệu Cocoon"
                 aria-describedby="cocoon-chat-scope"
-                className="min-w-0 flex-1 bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-sm text-[#FAF6F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
+                className="mb-2 min-h-[44px] w-full bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-xs text-[#FAF6F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
               >
-                <optgroup label="27 câu hỏi từ tài liệu nhóm">
-                  {CURATED_COCOON_QA.map((item) => (
+                <option value="">Câu hỏi gợi ý (không bắt buộc)…</option>
+                <optgroup label={`${GROUP_DOCUMENT_QUESTIONS.length} câu hỏi từ tài liệu nhóm`}>
+                  {GROUP_DOCUMENT_QUESTIONS.map((item) => (
                     <option key={item.id} value={`qa-${item.id}`}>{item.id}. {item.question}</option>
                   ))}
                 </optgroup>
-                <optgroup label="Tra cứu kiến thức Cocoon đã có">
+                <optgroup label={`${DEFENSE_DOCUMENT_QUESTIONS.length} câu hỏi trong Q&A bảo vệ đồ án`}>
+                  {DEFENSE_DOCUMENT_QUESTIONS.map((item) => (
+                    <option key={item.id} value={`qa-${item.id}`}>{item.id}. {item.question}</option>
+                  ))}
+                </optgroup>
+                <optgroup label={`${LEGACY_QUESTIONS.length} câu hỏi kiểm chứng bổ sung`}>
                   {LEGACY_QUESTIONS.map((item) => (
                     <option key={item.id} value={`legacy-${item.id}`}>{item.label}</option>
                   ))}
                 </optgroup>
               </select>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={draftQuestion}
+                  onChange={(event) => {
+                    setDraftQuestion(event.target.value);
+                    setSelectedQuestion('');
+                  }}
+                  maxLength={240}
+                  placeholder="Nhập câu hỏi về báo cáo Cocoon…"
+                  aria-label="Nhập câu hỏi về tài liệu Cocoon"
+                  aria-describedby="cocoon-chat-scope"
+                  className="min-h-[44px] min-w-0 flex-1 bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-sm text-[#FAF6F0] placeholder:text-[#C7B49C] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
+                />
               <button
                 type="submit"
-                className="p-2.5 rounded-xl bg-[#E69F00] text-[#3D2314] hover:bg-[#D48800] disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F2C24B]"
-                aria-label="Tra cứu câu hỏi đã chọn"
-                title="Tra cứu câu hỏi đã chọn"
+                disabled={!draftQuestion.trim()}
+                className="min-h-[44px] min-w-[44px] shrink-0 rounded-xl bg-[#E69F00] text-[#3D2314] hover:bg-[#D48800] disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F2C24B]"
+                aria-label="Gửi câu hỏi"
+                title="Gửi câu hỏi"
               >
                 <Send className="w-4 h-4" />
               </button>
+              </div>
             </div>
             <div id="cocoon-chat-scope" className="mt-2 text-[11px] leading-relaxed text-[#E5D9C5]">
-              Chỉ chọn câu hỏi có sẵn. Câu trả lời, số liệu và ghi chú giới hạn đều lấy từ tài liệu đã nạp; câu hỏi tình huống được ghi rõ là giả thuyết hoặc khuyến nghị.
+              Có thể gõ tự do hoặc chọn câu gợi ý. Chatbot chỉ tra cứu nội dung Cocoon đã nạp; câu ngoài phạm vi hoặc thiếu dữ liệu sẽ được báo rõ. Số liệu có nguồn, còn giả thuyết và khuyến nghị được ghi riêng.
             </div>
           </form>
         </div>
