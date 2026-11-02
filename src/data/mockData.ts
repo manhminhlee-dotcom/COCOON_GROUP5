@@ -1,5 +1,7 @@
 import { TeamMember, QuarterInfo, DefenseQuestion, ChartItem } from '../types';
 
+const chartAsset = (file: string) => `${import.meta.env.BASE_URL}assets/aistudio/${file}`;
+
 export const TEAM_MEMBERS: TeamMember[] = [
   {
     name: 'Nguyễn Lê Minh Anh',
@@ -249,37 +251,37 @@ export const ORIGINAL_CHARTS: ChartItem[] = [
     id: 1,
     title: 'Khách mới tăng mạnh nhất vào Q4/25 (39 khách)',
     type: 'Biểu đồ đường · Khách mới theo quý',
-    src: '/public/assets/aistudio/bi_u____1_xu_h__ng_4e8bbcf0.png',
+    src: chartAsset('bi_u____1_xu_h__ng_4e8bbcf0.png'),
   },
   {
     id: 2,
     title: 'Phân phối CLV mỗi khách (Lệch phải, Median 1.41 trđ)',
     type: 'Histogram · Độ lệch phân phối',
-    src: '/public/assets/aistudio/bi_u____2_ph_n_ph_i_CLV_7084ef0d.png',
+    src: chartAsset('bi_u____2_ph_n_ph_i_CLV_7084ef0d.png'),
   },
   {
     id: 3,
     title: 'Tỷ lệ rời bỏ theo kênh thu hút (Referral 64% vs Search Ads 34%)',
     type: 'Biểu đồ thanh ngang · Tỷ lệ rời bỏ',
-    src: '/public/assets/aistudio/bi_u____3_r_i_b__theo_k_nh_2e87060f.png',
+    src: chartAsset('bi_u____3_r_i_b__theo_k_nh_2e87060f.png'),
   },
   {
     id: 4,
     title: 'CLV theo hạng thành viên (Box Plot Member -> Gold)',
     type: 'Box Plot · Giá trị vòng đời theo hạng',
-    src: '/public/assets/aistudio/bi_u____4_CLV_theo_h_ng_e18a09c5.png',
+    src: chartAsset('bi_u____4_CLV_theo_h_ng_e18a09c5.png'),
   },
   {
     id: 5,
     title: 'Tương quan Recency và CLV (Phân tách mốc 180 ngày)',
     type: 'Scatter Plot · Ngày mua gần nhất vs CLV',
-    src: '/public/assets/aistudio/bi_u____5_recency_CLV_19c588a9.png',
+    src: chartAsset('bi_u____5_recency_CLV_19c588a9.png'),
   },
   {
     id: 6,
     title: 'Ma trận Kênh thu hút × Nhóm sản phẩm',
     type: 'Bản đồ nhiệt ma trận · Kênh x Sản phẩm',
-    src: '/public/assets/aistudio/bi_u____6_k_nh_x_s_n_ph_m_d0e598b6.png',
+    src: chartAsset('bi_u____6_k_nh_x_s_n_ph_m_d0e598b6.png'),
   },
 ];
 

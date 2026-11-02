@@ -33,7 +33,6 @@ export const CHEST_CONFIG = {
 } as const;
 
 export const FADE_DURATION_MS = 1500;
-export const CLIP_SRC = '/media/clip.mp4';
 
 export const TREASURE_CONFIG = {
   key: KEY_CONFIG,
