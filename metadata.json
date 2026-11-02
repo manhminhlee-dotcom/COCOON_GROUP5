@@ -1,0 +1,6 @@
+{
+  "name": "The Bookshelf",
+  "description": "Trải nghiệm đọc sách 3D tương tác chân thực — Rút sách từ kệ thư viện ấm cúng và thưởng thức",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
