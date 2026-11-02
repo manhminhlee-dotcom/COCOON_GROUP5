@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, ChevronRight, CheckCircle2, Sparkles, Send } from 'lucide-react';
 import { COLD_CALLING_QUESTIONS } from '../data/mockData';
 import { answerCocoonQuestion } from '../data/cocoonKnowledge';
+import { CURATED_COCOON_QA } from '../data/curatedCocoonQa';
 
 type ChatMessage = {
   role: 'ai' | 'user';
@@ -11,13 +12,15 @@ type ChatMessage = {
   hasCaveat?: boolean;
 };
 
-const QUICK_QUESTIONS = [
-  'CLV trung vị và trung bình là bao nhiêu?',
-  'Kênh nào có tỷ lệ rời bỏ cao nhất?',
-  '15 hội viên subscription có thuộc Marketplace × Dưỡng thể không?',
+const LEGACY_QUESTIONS = [
+  { id: 'provenance', label: 'Nguồn dữ liệu là dữ liệu thực tế hay mô phỏng?', query: 'Dữ liệu khách hàng có phải dữ liệu thực tế không?' },
+  { id: 'subscription', label: '15 khách subscription có thuộc Marketplace × Dưỡng thể không?', query: '15 hội viên subscription có thuộc Marketplace × Dưỡng thể không?' },
+  { id: 'threshold', label: 'Quy tắc chính xác để xác định churn là gì?', query: 'Churn được định nghĩa như thế nào, mốc 180 ngày?' },
+  { id: 'gold-loss', label: 'Ước tính CLV của khách Gold đã rời bỏ?', query: 'Ước tính thiệt hại CLV của khách Gold rời bỏ là bao nhiêu?' },
+  { id: 'product-revenue', label: 'Có thể xác nhận tỷ trọng doanh số theo sản phẩm không?', query: 'Có thể xác nhận tỷ trọng doanh số Dưỡng thể và Sữa rửa mặt không?' },
+  { id: 'recency', label: 'Recency và CLV có quan hệ nhân quả không?', query: 'Recency và CLV có tương quan hay nhân quả?' },
+  { id: 'channels', label: 'Tỷ lệ churn của các kênh là bao nhiêu?', query: 'Tỷ lệ churn của từng kênh là bao nhiêu?' },
 ];
-
-const MAX_CHAT_LENGTH = 300;
 
 export function Chapter4Defense() {
   const [activeQuestion, setActiveQuestion] = useState<number>(1);
@@ -26,19 +29,29 @@ export function Chapter4Defense() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: 'ai',
-      text: 'Mình tra cứu trong báo cáo Cocoon, Q&A và bảng khách hàng đã làm sạch. Nếu tài liệu không đủ hoặc có số liệu mâu thuẫn, mình sẽ nêu rõ thay vì tự suy đoán.',
+      text: 'Mình tra cứu 27 câu hỏi đã đối chiếu cùng các chủ đề từ bộ tài liệu Cocoon ban đầu. Chọn câu hỏi có sẵn để xem câu trả lời và nguồn; mình không nhận nội dung nhập tự do.',
     },
   ]);
-  const [inputMsg, setInputMsg] = useState('');
+  const [selectedQuestion, setSelectedQuestion] = useState('qa-1');
+  const [chatLogRef, setChatLogRef] = useState<HTMLDivElement | null>(null);
 
   const currentQ = COLD_CALLING_QUESTIONS.find((q) => q.id === activeQuestion) || COLD_CALLING_QUESTIONS[0];
   const isRevealed = !!revealedAnswers[activeQuestion];
 
-  const handleSendChat = (question = inputMsg) => {
-    const userText = question.trim();
-    if (!userText || userText.length > MAX_CHAT_LENGTH) return;
+  const handleSendChat = () => {
+    const curatedId = Number(selectedQuestion.replace('qa-', ''));
+    const curated = selectedQuestion.startsWith('qa-')
+      ? CURATED_COCOON_QA.find((item) => item.id === curatedId)
+      : undefined;
+    const legacy = selectedQuestion.startsWith('legacy-')
+      ? LEGACY_QUESTIONS.find((item) => `legacy-${item.id}` === selectedQuestion)
+      : undefined;
+    if (!curated && !legacy) return;
 
-    const answer = answerCocoonQuestion(userText);
+    const userText = curated?.question ?? legacy!.label;
+    const answer = curated
+      ? { text: curated.answer, sources: curated.sources.map((label) => ({ label })), hasCaveat: curated.hasCaveat }
+      : answerCocoonQuestion(legacy!.query);
     setChatMessages((prev) => [
       ...prev,
       { role: 'user', text: userText },
@@ -49,8 +62,11 @@ export function Chapter4Defense() {
         hasCaveat: answer.hasCaveat,
       },
     ]);
-    setInputMsg('');
   };
+
+  React.useEffect(() => {
+    if (chatLogRef) chatLogRef.scrollTo({ top: chatLogRef.scrollHeight, behavior: 'smooth' });
+  }, [chatMessages, chatLogRef]);
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
@@ -176,7 +192,7 @@ export function Chapter4Defense() {
         </div>
 
         {/* Khung tra cứu theo tài liệu (5 Cols) */}
-        <div className="lg:col-span-5 bg-[#3D2314] text-[#FAF6F0] p-6 rounded-3xl border border-[#4A2E1B] shadow-xl flex flex-col justify-between h-[540px]">
+        <div className="lg:col-span-5 bg-[#3D2314] text-[#FAF6F0] p-4 sm:p-6 rounded-3xl border border-[#4A2E1B] shadow-xl flex flex-col justify-between min-h-[500px] lg:h-[540px]">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-[#4A2E1B] mb-3">
               <div className="flex items-center gap-2">
@@ -191,7 +207,7 @@ export function Chapter4Defense() {
               <span className="text-[11px] text-[#E5D9C5]">Tra cứu tại chỗ</span>
             </div>
 
-            <div aria-live="polite" aria-relevant="additions" className="space-y-3 overflow-y-auto h-[350px] pr-2 text-sm">
+            <div ref={setChatLogRef} aria-live="polite" aria-relevant="additions" className="space-y-3 overflow-y-auto h-[350px] pr-2 text-sm">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
@@ -210,53 +226,43 @@ export function Chapter4Defense() {
                   )}
                 </div>
               ))}
-              {chatMessages.length === 1 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {QUICK_QUESTIONS.map((question) => (
-                    <button
-                      key={question}
-                      type="button"
-                      onClick={() => handleSendChat(question)}
-                      className="max-w-full min-h-11 whitespace-normal break-words rounded-full border border-[#765238] px-3 py-2 text-left text-xs text-[#FAF6F0] transition-colors hover:border-[#E69F00] hover:text-[#F2C24B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E69F00]"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
           <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleSendChat();
-            }}
+            onSubmit={(event) => { event.preventDefault(); handleSendChat(); }}
             className="pt-3 border-t border-[#4A2E1B]"
           >
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={inputMsg}
-                onChange={(event) => setInputMsg(event.target.value)}
-                maxLength={MAX_CHAT_LENGTH}
-                aria-label="Nhập câu hỏi về tài liệu Cocoon"
+              <select
+                value={selectedQuestion}
+                onChange={(event) => setSelectedQuestion(event.target.value)}
+                aria-label="Chọn câu hỏi trong tài liệu Cocoon"
                 aria-describedby="cocoon-chat-scope"
-                placeholder="Hỏi về CLV, churn, kênh hoặc sản phẩm..."
-                className="min-w-0 flex-1 bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-base sm:text-sm text-[#FAF6F0] placeholder:text-[#D8C9B8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
-              />
+                className="min-w-0 flex-1 bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-sm text-[#FAF6F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
+              >
+                <optgroup label="27 câu hỏi từ tài liệu nhóm">
+                  {CURATED_COCOON_QA.map((item) => (
+                    <option key={item.id} value={`qa-${item.id}`}>{item.id}. {item.question}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Tra cứu kiến thức Cocoon đã có">
+                  {LEGACY_QUESTIONS.map((item) => (
+                    <option key={item.id} value={`legacy-${item.id}`}>{item.label}</option>
+                  ))}
+                </optgroup>
+              </select>
               <button
                 type="submit"
-                disabled={!inputMsg.trim()}
                 className="p-2.5 rounded-xl bg-[#E69F00] text-[#3D2314] hover:bg-[#D48800] disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F2C24B]"
-                aria-label="Gửi câu hỏi"
+                aria-label="Tra cứu câu hỏi đã chọn"
+                title="Tra cứu câu hỏi đã chọn"
               >
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            <div id="cocoon-chat-scope" className="mt-2 flex items-center justify-between gap-3 text-[11px] text-[#E5D9C5]">
-              <span>Chỉ trả lời trong phạm vi tài liệu. Tối đa {MAX_CHAT_LENGTH} ký tự.</span>
-              <span aria-live="off" className="shrink-0 tabular-nums">{inputMsg.length}/{MAX_CHAT_LENGTH}</span>
+            <div id="cocoon-chat-scope" className="mt-2 text-[11px] leading-relaxed text-[#E5D9C5]">
+              Chỉ chọn câu hỏi có sẵn. Câu trả lời, số liệu và ghi chú giới hạn đều lấy từ tài liệu đã nạp; câu hỏi tình huống được ghi rõ là giả thuyết hoặc khuyến nghị.
             </div>
           </form>
         </div>

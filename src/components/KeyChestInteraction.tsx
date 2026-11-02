@@ -35,6 +35,8 @@ export function KeyChestInteraction({
   onFadeStart,
   onOpenClip,
   onInteractionBusyChange,
+  onKeyAudioActivityChange,
+  onChestCueChange,
   keyLabelRef,
   chestLabelRef,
 }: {
@@ -44,6 +46,8 @@ export function KeyChestInteraction({
   onFadeStart: () => void;
   onOpenClip: () => void;
   onInteractionBusyChange: (busy: boolean) => void;
+  onKeyAudioActivityChange: (active: boolean) => void;
+  onChestCueChange: (near: boolean) => void;
   keyLabelRef: React.RefObject<HTMLDivElement | null>;
   chestLabelRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -83,6 +87,10 @@ export function KeyChestInteraction({
   const setNear = (value: boolean) => {
     setNearChest((current) => current === value ? current : value);
   };
+
+  useEffect(() => {
+    onChestCueChange(nearChest && (stage === 'dragging' || stage === 'unlocking'));
+  }, [nearChest, stage, onChestCueChange]);
 
   const updateDragTarget = (event: ThreeEvent<PointerEvent>) => {
     if (!event.ray.intersectPlane(dragPlane.current, rayPoint.current)) return false;
@@ -137,6 +145,7 @@ export function KeyChestInteraction({
     timer.current = 0;
     (event.target as unknown as { setPointerCapture: (pointerId: number) => void }).setPointerCapture(event.pointerId);
     onInteractionBusyChange(true);
+    onKeyAudioActivityChange(true);
     setKeyHovered(false);
     setStage('dragging');
   };
@@ -156,7 +165,6 @@ export function KeyChestInteraction({
     returnStart.current.copy(keyRef.current.position);
     // The last few centimeters are magnetic: a near-perfect drop snaps the key into the lock.
     if (keyTip.current.distanceTo(lockWorld) <= TREASURE_CONFIG.nearDistance) {
-      setNear(false);
       setStage('unlocking');
     } else {
       setNear(false);
@@ -199,7 +207,7 @@ export function KeyChestInteraction({
       key.position.lerpVectors(returnStart.current, homeTarget, t);
       key.rotation.z = THREE.MathUtils.lerp(key.rotation.z, 0.08, easing);
       key.rotation.y = THREE.MathUtils.lerp(key.rotation.y, 0, easing);
-      if (t >= 1) { setStage('idle'); onInteractionBusyChange(false); }
+      if (t >= 1) { setStage('idle'); onInteractionBusyChange(false); onKeyAudioActivityChange(false); }
     } else if (stage === 'unlocking') {
       timer.current += delta;
       const t = THREE.MathUtils.smoothstep(timer.current / (prefersReducedMotion ? 0.38 : TREASURE_CONFIG.unlockDuration), 0, 1);
@@ -227,7 +235,7 @@ export function KeyChestInteraction({
       unlockTarget.current.copy(lockWorld).add(scratch.current.set(-KEY_CONFIG.tip[0] * KEY_CONFIG.scale, 0, 0.012));
       key.position.lerpVectors(unlockTarget.current, homeTarget, t);
       key.rotation.z = THREE.MathUtils.lerp(Math.PI / 2 + 0.08, 0.08, t);
-      if (t >= 1) { timer.current = 0; fadeTriggered.current = false; setStage('idle'); onInteractionBusyChange(false); }
+      if (t >= 1) { timer.current = 0; fadeTriggered.current = false; setStage('idle'); onInteractionBusyChange(false); onKeyAudioActivityChange(false); }
     }
 
     if (glowRef.current) {
@@ -249,7 +257,9 @@ export function KeyChestInteraction({
     keyLabelWorld.current.copy(keyLabelLocal).applyMatrix4(key.matrixWorld);
     placeScreenLabel(keyLabelRef.current, keyLabelWorld.current, promptTextFor(stage, keyHovered), !isReading && !['fading', 'playing', 'resetting'].includes(stage), camera, size, labelNdc.current);
     chestLabelWorld.current.copy(chestLabelLocal).add(chestRootPosition);
-    placeScreenLabel(chestLabelRef.current, chestLabelWorld.current, nearChest ? 'THẢ CHÌA ĐỂ MỞ' : 'Xem clip ở ĐÂY', showChestPrompt && !isReading && !['unlocking', 'opening', 'fading', 'playing', 'resetting'].includes(stage), camera, size, labelNdc.current);
+    const chestText = nearChest && (stage === 'dragging' || stage === 'unlocking') ? 'THẢ CHÌA ĐỂ MỞ' : 'CLIP Ở ĐÂY';
+    const chestLabelVisible = !isReading && !clipOpen && ['idle', 'dragging', 'returning'].includes(stage);
+    placeScreenLabel(chestLabelRef.current, chestLabelWorld.current, chestText, chestLabelVisible, camera, size, labelNdc.current);
   });
 
   const showChestPrompt = chestHovered || nearChest;

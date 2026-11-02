@@ -33,6 +33,8 @@ type BookPageTurnProps = {
   backPage: ReactNode;
 };
 
+type RoomAudioScene = 'silent' | 'ambient' | 'chest';
+
 function BookPageTurn({
   direction,
   duration,
@@ -254,7 +256,7 @@ function RealisticBookReader({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 30 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="relative w-full max-w-6xl h-[94vh] bg-[#FAF6F0] text-[#3D2314] rounded-3xl border-4 border-[#3D2314] flex flex-col overflow-hidden shadow-2xl"
+          className="relative w-full max-w-6xl h-[min(94dvh,920px)] min-h-0 bg-[#FAF6F0] text-[#3D2314] rounded-3xl border-4 border-[#3D2314] flex flex-col overflow-hidden shadow-2xl"
           style={{
             boxShadow:
               '0 36px 96px -18px rgba(0, 0, 0, 0.88), 0 12px 34px rgba(34, 19, 11, 0.48), 0 0 42px rgba(230, 159, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.72), inset 0 0 28px rgba(61, 35, 20, 0.12)',
@@ -279,7 +281,7 @@ function RealisticBookReader({
           />
 
           {/* Dải ruy băng đánh dấu trang mạ vàng */}
-          <div className="absolute top-0 right-28 w-4 h-16 bg-[#E69F00] rounded-b-md shadow-md z-40 pointer-events-none" />
+          <div className="absolute top-0 right-28 hidden h-16 w-4 rounded-b-md bg-[#E69F00] shadow-md z-40 pointer-events-none sm:block" />
 
           {/* THANH ĐẦU TRANG (HEADER BAR) */}
           <div className="px-3 sm:px-6 py-3.5 border-b border-[#3D2314]/15 bg-[#FAF6F0] flex items-center justify-between z-20">
@@ -321,13 +323,13 @@ function RealisticBookReader({
               </div>
             </div>
 
-            {/* The crease stays visible at rest and deepens while a leaf turns. */}
+            {/* The central crease appears only during a page turn so it never obscures the reading page. */}
             <div
               aria-hidden="true"
               className="absolute inset-y-0 left-1/2 z-20 w-2 -translate-x-1/2 pointer-events-none"
               style={{
                 background: 'linear-gradient(90deg, rgba(61,35,20,.06), rgba(61,35,20,.18) 44%, rgba(255,255,255,.48) 50%, rgba(61,35,20,.12) 62%, rgba(61,35,20,.04))',
-                opacity: isFlipping ? 0.3 : 0.78,
+                opacity: isFlipping ? 0.3 : 0,
                 filter: 'drop-shadow(0 0 5px rgba(61,35,20,.14))',
               }}
             />
@@ -472,28 +474,152 @@ function RealisticBookReader({
    APP CHÍNH (THE BOOKSHELF EXPERIENCE)
 ========================================================================= */
 export default function App() {
-  const [compactLayout, setCompactLayout] = useState(() => window.innerWidth < 640);
+  const [compactLayout, setCompactLayout] = useState(() => window.innerWidth < 850);
   const [isReading, setIsReading] = useState(false);
   const [isClipOpen, setIsClipOpen] = useState(false);
   const [isTreasureFading, setIsTreasureFading] = useState(false);
   const [interactionBusy, setInteractionBusy] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [keyAudioActive, setKeyAudioActive] = useState(false);
+  const [chestCueActive, setChestCueActive] = useState(false);
   const interactionBusyRef = useRef(false);
   const keyLabelRef = useRef<HTMLDivElement>(null);
   const chestLabelRef = useRef<HTMLDivElement>(null);
+  const reportLabelRef = useRef<HTMLDivElement>(null);
+  const bookPullRef = useRef<(() => void) | null>(null);
+  const ambientAudioRef = useRef<HTMLAudioElement>(null);
+  const chestAudioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const ambientGainRef = useRef<GainNode | null>(null);
+  const chestGainRef = useRef<GainNode | null>(null);
+  const audioUnlockedRef = useRef(false);
+  const audioSceneRef = useRef<RoomAudioScene>('silent');
+  const musicEnabledRef = useRef(true);
   useEffect(() => {
-    const syncLayout = () => setCompactLayout(window.innerWidth < 640);
+    const syncLayout = () => setCompactLayout(window.innerWidth < 850);
     window.addEventListener('resize', syncLayout);
     return () => window.removeEventListener('resize', syncLayout);
+  }, []);
+  useEffect(() => {
+    musicEnabledRef.current = musicEnabled;
+  }, [musicEnabled]);
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioUnlockedRef.current) return;
+      audioUnlockedRef.current = true;
+      const ambient = ambientAudioRef.current;
+      const chest = chestAudioRef.current;
+      if (!ambient || !chest) return;
+
+      try {
+        const context = new AudioContext();
+        const ambientGain = context.createGain();
+        const chestGain = context.createGain();
+        ambientGain.gain.value = 0;
+        chestGain.gain.value = 0;
+        context.createMediaElementSource(ambient).connect(ambientGain);
+        context.createMediaElementSource(chest).connect(chestGain);
+        ambientGain.connect(context.destination);
+        chestGain.connect(context.destination);
+        audioContextRef.current = context;
+        ambientGainRef.current = ambientGain;
+        chestGainRef.current = chestGain;
+        void context.resume();
+      } catch {
+        // Older browsers still get the same tracks with a conservative element volume.
+        ambient.volume = 0.12;
+        chest.volume = 0.06;
+      }
+
+      ambient.currentTime = 33;
+      void ambient.play().catch(() => undefined);
+      setAudioUnlocked(true);
+    };
+
+    document.addEventListener('pointerdown', unlockAudio, true);
+    document.addEventListener('keydown', unlockAudio, true);
+    return () => {
+      document.removeEventListener('pointerdown', unlockAudio, true);
+      document.removeEventListener('keydown', unlockAudio, true);
+    };
+  }, []);
+
+  const audioScene: RoomAudioScene = !musicEnabled || isReading || isTreasureFading || isClipOpen
+    ? 'silent'
+    : chestCueActive
+      ? 'chest'
+      : keyAudioActive
+        ? 'silent'
+        : 'ambient';
+
+  useEffect(() => {
+    if (!audioUnlocked) return;
+    const ambient = ambientAudioRef.current;
+    const chest = chestAudioRef.current;
+    const context = audioContextRef.current;
+    if (!ambient || !chest) return;
+
+    const fade = (gain: GainNode | null, media: HTMLAudioElement, target: number) => {
+      if (gain && context) {
+        const now = context.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(target, now + 0.24);
+      } else {
+        media.volume = target;
+      }
+    };
+    const previousScene = audioSceneRef.current;
+    const nextGainAmbient = audioScene === 'ambient' ? 0.12 : 0;
+    const nextGainChest = audioScene === 'chest' ? 0.055 : 0;
+    fade(ambientGainRef.current, ambient, nextGainAmbient);
+    fade(chestGainRef.current, chest, nextGainChest);
+
+    if (audioScene === 'ambient') {
+      if (ambient.currentTime < 33 || (Number.isFinite(ambient.duration) && ambient.currentTime >= ambient.duration - 0.08)) ambient.currentTime = 33;
+      void ambient.play().catch(() => undefined);
+    } else if (audioScene === 'chest') {
+      if (previousScene !== 'chest') chest.currentTime = 0;
+      void chest.play().catch(() => undefined);
+    }
+
+    audioSceneRef.current = audioScene;
+    const stopAfterFade = window.setTimeout(() => {
+      if (audioSceneRef.current !== 'ambient' && !ambient.paused) ambient.pause();
+      if (audioSceneRef.current !== 'chest' && !chest.paused) chest.pause();
+    }, 270);
+    return () => window.clearTimeout(stopAfterFade);
+  }, [audioScene, audioUnlocked]);
+
+  useEffect(() => {
+    const ambient = ambientAudioRef.current;
+    if (!ambient) return;
+    const restartIntroSegment = () => {
+      if (audioSceneRef.current !== 'ambient' || !musicEnabledRef.current) return;
+      ambient.currentTime = 33;
+      void ambient.play().catch(() => undefined);
+    };
+    ambient.addEventListener('ended', restartIntroSegment);
+    return () => ambient.removeEventListener('ended', restartIntroSegment);
+  }, []);
+
+  useEffect(() => () => {
+    void audioContextRef.current?.close();
   }, []);
   const handleInteractionBusyChange = useCallback((busy: boolean) => {
     interactionBusyRef.current = busy;
     setInteractionBusy(busy);
   }, []);
+  const handleKeyAudioActivityChange = useCallback((active: boolean) => setKeyAudioActive(active), []);
+  const handleChestCueChange = useCallback((near: boolean) => setChestCueActive(near), []);
   const interactionsLocked = interactionBusy || isTreasureFading || isClipOpen;
-  const cameraPosition: [number, number, number] = compactLayout ? [0, 0.1, 3.2] : [0, 0.1, 2.2];
+  const cameraPosition: [number, number, number] = compactLayout ? [-0.28, 0.1, 3.4] : [0, 0.1, 2.2];
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#120E0B] select-none">
+    <div className="relative w-screen h-[100dvh] min-h-[100svh] overflow-hidden bg-[#120E0B] select-none">
+      <audio ref={ambientAudioRef} src={`${import.meta.env.BASE_URL}audio/ambient-intro.mp3`} preload="auto" />
+      <audio ref={chestAudioRef} src={`${import.meta.env.BASE_URL}audio/chest-cue.m4a`} preload="auto" />
       {/* 1. KHÔNG GIAN CĂN PHÒNG & KỆ SÁCH 3D CHÂN THỰC */}
       <div
         className={`w-full h-full transition-all duration-700 ${
@@ -509,7 +635,7 @@ export default function App() {
             alpha: false,
             powerPreference: 'high-performance',
           }}
-          camera={{ position: cameraPosition, fov: compactLayout ? 52 : 45 }}
+          camera={{ position: cameraPosition, fov: compactLayout ? 75 : 45 }}
         >
           <CozyRoomScene
             onOpenBook={() => {
@@ -523,14 +649,33 @@ export default function App() {
             onFadeStart={() => setIsTreasureFading(true)}
             onOpenClip={() => setIsClipOpen(true)}
             onInteractionBusyChange={handleInteractionBusyChange}
+            onKeyAudioActivityChange={handleKeyAudioActivityChange}
+            onChestCueChange={handleChestCueChange}
             keyLabelRef={keyLabelRef}
             chestLabelRef={chestLabelRef}
+            reportLabelRef={reportLabelRef}
+            bookPullRef={bookPullRef}
           />
         </Canvas>
       </div>
 
       <div ref={keyLabelRef} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-30 whitespace-nowrap -translate-x-1/2 -translate-y-full rounded-full border border-[#C18B39]/55 bg-[#1A100A]/90 px-3 py-1.5 text-[10px] font-bold tracking-[0.08em] text-[#E8CEA0] shadow-lg" style={{ display: 'none' }} />
       <div ref={chestLabelRef} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-30 whitespace-nowrap -translate-x-1/2 -translate-y-full rounded-full border border-[#D3A14B]/75 bg-[#1A100A]/92 px-3 py-1.5 text-xs font-semibold text-[#F8E8C8] shadow-[0_8px_24px_rgba(0,0,0,.38)]" style={{ display: 'none' }} />
+      <div ref={reportLabelRef} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-30 -translate-x-1/2 -translate-y-full rounded-full border border-[#C18B39]/65 bg-[#1A100A]/92 px-3 py-1.5 text-[10px] font-extrabold tracking-[0.12em] text-[#F0D18A] shadow-[0_8px_24px_rgba(0,0,0,.42)]" style={{ display: 'none' }} />
+
+      {!isReading && !isTreasureFading && !isClipOpen && (
+        <button
+          type="button"
+          aria-pressed={musicEnabled}
+          aria-label={musicEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+          title={audioUnlocked ? (musicEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền') : 'Nhạc bắt đầu sau lần chạm đầu tiên'}
+          onClick={() => setMusicEnabled((enabled) => !enabled)}
+          className="absolute top-5 left-5 z-20 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#C18B39]/50 bg-[#1A100A]/88 px-3.5 text-xs font-semibold text-[#F8E8C8] shadow-[0_8px_24px_rgba(0,0,0,.38)] backdrop-blur-md transition-colors hover:border-[#E7BC5E] hover:text-[#F2C56B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E7BC5E]"
+        >
+          {musicEnabled ? <Volume2 className="h-4 w-4 text-[#E7BC5E]" /> : <VolumeX className="h-4 w-4 opacity-70" />}
+          <span className="hidden sm:inline">{musicEnabled ? 'Nhạc nền bật' : 'Nhạc nền tắt'}</span>
+        </button>
+      )}
 
       <motion.div
         aria-hidden="true"
@@ -565,13 +710,13 @@ export default function App() {
       {!isReading && !isTreasureFading && !isClipOpen && (
         <button
           onClick={() => {
-            playPageTurnSound();
-            setIsReading(true);
+            bookPullRef.current?.();
           }}
-          className="absolute top-6 right-6 z-20 px-4 py-2 bg-[#1A140F]/85 hover:bg-[#E69F00] text-[#FAF6F0] hover:text-[#3D2314] border border-[#E69F00]/50 rounded-xl text-xs font-bold transition-all shadow-xl flex items-center gap-2 cursor-pointer"
+          className="fixed top-5 right-5 z-20 flex h-11 w-11 max-w-[calc(100vw-5.5rem)] items-center justify-center gap-2 rounded-xl border border-[#E69F00]/50 bg-[#1A140F]/90 px-0 text-xs font-bold text-[#FAF6F0] shadow-xl transition-all hover:bg-[#E69F00] hover:text-[#3D2314] sm:top-6 sm:right-6 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
+          aria-label="Rút sách ra đọc"
         >
           <BookOpen className="w-4 h-4 text-[#E69F00]" />
-          <span>Rút Sách Ra Đọc</span>
+          <span className="hidden md:inline">Rút Sách Ra Đọc</span>
         </button>
       )}
 

@@ -1,5 +1,5 @@
 export const KEY_CONFIG = {
-  home: [-1.22, -0.06, -0.10] as [number, number, number],
+  home: [-0.98, -0.06, -0.10] as [number, number, number],
   scale: 0.72,
   hoverScale: 1.12,
   floatAmplitude: 0.012,

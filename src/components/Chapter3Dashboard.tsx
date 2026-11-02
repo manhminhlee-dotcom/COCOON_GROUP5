@@ -18,6 +18,84 @@ import {
 } from 'lucide-react';
 import { ORIGINAL_CHARTS, HEATMAP_MATRIX, CATEGORY_NAMES } from '../data/mockData';
 
+const PRODUCT_SALES_MIX = [
+  { name: 'Dưỡng thể', pct: 22, color: '#E69F00' },
+  { name: 'Sữa rửa mặt', pct: 18, color: '#3D2314' },
+  { name: 'Dưỡng môi', pct: 14, color: '#D87093' },
+  { name: 'Mặt nạ', pct: 8, color: '#F5A623' },
+  { name: 'Kem dưỡng', pct: 16, color: '#4A2E1B' },
+  { name: 'Serum', pct: 7, color: '#C2527A' },
+  { name: 'Chống nắng', pct: 10, color: '#8A6A54' },
+  { name: 'Toner', pct: 5, color: '#D48800' },
+];
+
+function ProductMixDonut() {
+  const radius = 67;
+  const circumference = 2 * Math.PI * radius;
+  let consumed = 0;
+  const segments = PRODUCT_SALES_MIX.map((item) => {
+    const start = consumed;
+    consumed += item.pct;
+    return { ...item, start, length: (item.pct / 100) * circumference };
+  });
+
+  return (
+    <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_164px] sm:gap-2">
+      <svg
+        viewBox="0 0 200 200"
+        role="img"
+        aria-label="Biểu đồ donut tỷ trọng sản phẩm: Dưỡng thể 22%, Sữa rửa mặt 18%, Dưỡng môi 14%, Kem dưỡng 16%, Chống nắng 10%, Mặt nạ 8%, Serum 7%, Toner 5%"
+        className="mx-auto block aspect-square w-full max-w-[276px] overflow-visible"
+      >
+        <circle cx="100" cy="100" r={radius} fill="none" stroke="#eadfcd" strokeWidth="37" />
+        {segments.map((segment) => {
+          const angle = ((segment.start + segment.pct / 2) / 100) * Math.PI * 2 - Math.PI / 2;
+          const labelRadius = radius;
+          const x = 100 + Math.cos(angle) * labelRadius;
+          const y = 100 + Math.sin(angle) * labelRadius;
+          const visibleLength = Math.max(0, segment.length - 2.2);
+          return (
+            <g key={segment.name}>
+              <circle
+                cx="100"
+                cy="100"
+                r={radius}
+                fill="none"
+                stroke={segment.color}
+                strokeWidth="37"
+                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                strokeDashoffset={-(segment.start / 100) * circumference}
+                transform="rotate(-90 100 100)"
+              />
+              <text
+                x={x}
+                y={y}
+                fill="#fffaf1"
+                fontSize="8.5"
+                fontWeight="800"
+                textAnchor="middle"
+                dominantBaseline="central"
+                style={{ paintOrder: 'stroke', stroke: 'rgba(35, 20, 11, .24)', strokeWidth: 1 }}
+              >
+                {segment.pct}%
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-[11px] font-semibold text-[#3D2314] sm:grid-cols-1">
+        {PRODUCT_SALES_MIX.map((item) => (
+          <li key={item.name} className="flex min-w-0 items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-[3px] shadow-sm" style={{ backgroundColor: item.color }} />
+            <span className="truncate">{item.name}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function Chapter3Dashboard({
   onOpenLightbox,
   onOpenExcel,
@@ -269,7 +347,7 @@ export function Chapter3Dashboard({
           </div>
         </div>
 
-        <div className="lg:col-span-5 bg-[#FFFDF9] p-6 rounded-3xl border border-[#EFE6D5] shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-[#FFFDF9] p-5 sm:p-6 rounded-3xl border border-[#EFE6D5] shadow-[0_16px_44px_rgba(61,35,20,.10)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-extrabold uppercase tracking-wider text-[#3D2314] bg-[#3D2314]/10 px-2.5 py-1 rounded-md">
@@ -615,29 +693,12 @@ export function Chapter3Dashboard({
               Tỷ Trọng Doanh Số Sản Phẩm
             </h2>
             <p className="text-xs text-[#6B4C38] mt-1 mb-3">
-              Dưỡng thể và Sữa rửa mặt dẫn đầu thị phần tiêu dùng của khách hàng Cocoon.
+              Tỷ lệ từng nhóm hiển thị trên cung tròn; Dưỡng thể và Sữa rửa mặt là hai nhóm đứng đầu.
             </p>
           </div>
 
-          <div className="space-y-2 bg-[#FAF6F0] p-4 rounded-2xl border border-[#EFE6D5]">
-            {[
-              { name: 'Dưỡng thể Cà phê', pct: 22, color: 'bg-[#E69F00]' },
-              { name: 'Sữa rửa mặt Nghệ', pct: 18, color: 'bg-[#3D2314]' },
-              { name: 'Dưỡng môi Cà phê', pct: 14, color: 'bg-[#D87093]' },
-              { name: 'Kem dưỡng Bí đao', pct: 16, color: 'bg-[#4A2E1B]' },
-              { name: 'Chống nắng Bí đao', pct: 10, color: 'bg-[#6B4C38]' },
-              { name: 'Mặt nạ Hoa hồng', pct: 8, color: 'bg-[#F5A623]' },
-              { name: 'Serum Bí đao', pct: 7, color: 'bg-[#C2527A]' },
-              { name: 'Toner Cà phê', pct: 5, color: 'bg-[#D48800]' },
-            ].map((p, i) => (
-              <div key={i} className="flex items-center justify-between text-xs font-semibold text-[#3D2314]">
-                <div className="flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full ${p.color}`} />
-                  <span>{p.name}</span>
-                </div>
-                <span className="font-mono font-bold">{p.pct}%</span>
-              </div>
-            ))}
+          <div className="rounded-2xl border border-[#EFE6D5] bg-[#FAF6F0] p-3 sm:p-4">
+            <ProductMixDonut />
           </div>
 
           <div className="mt-3 text-center text-xs font-bold text-[#3D2314]">
@@ -645,7 +706,7 @@ export function Chapter3Dashboard({
           </div>
         </div>
 
-        <div className="lg:col-span-7 bg-[#3D2314] text-[#FAF6F0] p-6 sm:p-8 rounded-3xl border border-[#4A2E1B] shadow-xl flex flex-col justify-between relative overflow-hidden">
+        <div className="lg:col-span-6 bg-[#3D2314] text-[#FAF6F0] p-6 sm:p-8 rounded-3xl border border-[#4A2E1B] shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-extrabold uppercase tracking-widest text-[#E69F00] bg-[#2C1810] px-3 py-1 rounded-full border border-[#E69F00]/30">
