@@ -1,3 +1,5 @@
+import { CURATED_COCOON_QA } from './curatedCocoonQa.ts';
+
 export interface KnowledgeSource {
   label: string;
 }
@@ -18,14 +20,29 @@ const sources = {
   shortDeck: { label: 'Cocoon.pdf · trang 1–2' },
 };
 
+export const COCOON_KNOWLEDGE_SOURCES = [
+  { title: 'Bảng khách hàng đã làm sạch', detail: 'Customers · Data Dictionary' },
+  { title: 'Q&A bảo vệ đồ án', detail: '3 trang' },
+  { title: 'Báo cáo phân tích khách hàng', detail: '7 trang' },
+  { title: 'Dashboard BI Cocoon', detail: 'HTML và biểu đồ đi kèm' },
+  { title: 'Câu hỏi nhóm', detail: '35 câu đã gắn nguồn' },
+];
+
 const channels = [
-  { name: 'Referral', sample: 22, churn: '63,6%', churned: 14 },
-  { name: 'TikTok', sample: 51, churn: '47,1%', churned: 24 },
-  { name: 'Marketplace', sample: 66, churn: '47,0%', churned: 31 },
-  { name: 'In-store', sample: 43, churn: '46,5%', churned: 20 },
-  { name: 'Influencer', sample: 21, churn: '42,9%', churned: 9 },
-  { name: 'Instagram', sample: 59, churn: '42,4%', churned: 25 },
-  { name: 'Search ads', sample: 38, churn: '34,2%', churned: 13 },
+  { name: 'Referral', terms: ['referral', 'gioi thieu', 'kenh gioi thieu', 'nguon gioi thieu'], sample: 22, churn: '63,6%', churned: 14 },
+  { name: 'TikTok', terms: ['tiktok'], sample: 51, churn: '47,1%', churned: 24 },
+  { name: 'Marketplace', terms: ['marketplace', 'san thuong mai dien tu', 'san tmdt', 'tmdt'], sample: 66, churn: '47,0%', churned: 31 },
+  { name: 'In-store', terms: ['in store', 'in-store', 'cua hang', 'tai cua hang', 'mua tai cua hang'], sample: 43, churn: '46,5%', churned: 20 },
+  { name: 'Influencer', terms: ['influencer', 'nguoi anh huong'], sample: 21, churn: '42,9%', churned: 9 },
+  { name: 'Instagram', terms: ['instagram'], sample: 59, churn: '42,4%', churned: 25 },
+  { name: 'Search ads', terms: ['search ads', 'searchad', 'quang cao tim kiem', 'tim kiem'], sample: 38, churn: '34,2%', churned: 13 },
+];
+
+const loyaltyTierChurn = [
+  { name: 'Member', sample: 104, churned: 72, rate: '69,2%' },
+  { name: 'Bronze', sample: 98, churned: 29, rate: '29,6%' },
+  { name: 'Silver', sample: 74, churned: 23, rate: '31,1%' },
+  { name: 'Gold', sample: 24, churned: 12, rate: '50,0%' },
 ];
 
 const reportedQuarterlyNewCustomers = [
@@ -65,12 +82,103 @@ function normalize(value: string) {
     .trim();
 }
 
+const RETRIEVAL_STOP_WORDS = new Set([
+  'bao', 'biet', 'cac', 'cho', 'co', 'cua', 'gi', 'giua', 'hay', 'la', 'lai', 'lap',
+  'nao', 'nhu', 'nhung', 'qua', 'sao', 'the', 'theo', 'thi', 'toi', 'trong', 'tu',
+  've', 'voi', 'va', 'mot', 'nhom', 'khach', 'hang', 'cua', 'duoc', 'de', 'vi',
+  'nhu', 'ra', 'nao', 'hay', 'so', 'voi', 'co', 'the', 'la', 'giua', 'tai', 'sao',
+]);
+
+// Phrase concepts let Vietnamese, English, and colloquial variants reach the same
+// source-backed answer without turning the chatbot into open-domain guessing.
+const RETRIEVAL_CONCEPTS = [
+  { key: 'clv', phrases: ['clv', 'customer lifetime value', 'gia tri vong doi', 'gia tri tron doi', 'gia tri khach hang'] },
+  { key: 'churn', phrases: ['churn', 'roi bo', 'roi bo khach hang', 'khong mua lai', 'ngung mua', 'mat khach', 'mat khach hang', 'khach roi di', 'customer attrition'] },
+  { key: 'recency', phrases: ['recency', 'ngay tu lan mua cuoi', 'ngay mua gan nhat', 'lan mua gan nhat', 'thoi gian ngung mua'] },
+  { key: 'new-customers', phrases: ['khach moi', 'new customer', 'khach hang moi', 'tang truong khach hang'] },
+  { key: 'tier', phrases: ['hang thanh vien', 'loyalty tier', 'member', 'bronze', 'silver', 'gold'] },
+  { key: 'product-category', phrases: ['nhom san pham', 'danh muc san pham', 'product category', 'category', 'mat hang'] },
+  { key: 'channel', phrases: ['kenh thu hut', 'kenh ban hang', 'acquisition channel', 'search ads', 'in store', 'marketplace', 'instagram', 'tiktok', 'referral', 'influencer'] },
+  { key: 'referral', phrases: ['referral', 'gioi thieu', 'kenh gioi thieu'] },
+  { key: 'search-ads', phrases: ['search ads', 'quang cao tim kiem'] },
+  { key: 'in-store', phrases: ['in store', 'cua hang', 'tai cua hang'] },
+  { key: 'subscription', phrases: ['subscription', 'dang ky dinh ky', 'thanh vien dang ky'] },
+  { key: 'revenue-share', phrases: ['ty trong doanh so', 'doanh so theo san pham', 'ty le doanh thu', 'product revenue'] },
+];
+
+function retrievalText(value: string) {
+  return normalize(value).replace(/\bq([1-4])\s*[/-]?\s*(?:20)?([2-6]\d)\b/g, (_match, quarter: string, year: string) => `q${quarter} 20${year}`);
+}
+
+function retrievalTerms(value: string) {
+  const normalized = retrievalText(value);
+  const terms = new Set(
+    normalized.split(' ').filter((term) => term.length > 1 && !RETRIEVAL_STOP_WORDS.has(term)),
+  );
+  for (const concept of RETRIEVAL_CONCEPTS) {
+    if (concept.phrases.some((phrase) => normalized.includes(normalize(phrase)))) {
+      terms.add(`concept:${concept.key}`);
+    }
+  }
+  return terms;
+}
+
+function findClosestCuratedAnswer(query: string): GroundedAnswer | null {
+  const normalizedQuery = retrievalText(query);
+  const queryTerms = retrievalTerms(query);
+  if (queryTerms.size < 3) return null;
+
+  const ranked = CURATED_COCOON_QA.map((item) => {
+    const questionText = retrievalText(item.question);
+    const questionTerms = retrievalTerms(item.question);
+    const answerTerms = retrievalTerms(item.answer);
+    const evidenceTerms = new Set([...questionTerms, ...answerTerms]);
+    const overlap = [...queryTerms].filter((term) => evidenceTerms.has(term)).length;
+    const questionOverlap = [...queryTerms].filter((term) => questionTerms.has(term)).length;
+    const queryCoverage = overlap / queryTerms.size;
+    const questionCoverage = questionOverlap / queryTerms.size;
+    const dice = (2 * overlap) / (queryTerms.size + evidenceTerms.size);
+    const phraseBonus = normalizedQuery.length > 12 && questionText.includes(normalizedQuery) ? 0.35 : 0;
+    // Keep the question itself dominant; answer text is secondary evidence for
+    // paraphrases, so a shared generic word cannot win by itself.
+    const score = questionCoverage * 0.5 + queryCoverage * 0.32 + dice * 0.18 + phraseBonus;
+    return { item, overlap, score, queryCoverage, questionCoverage };
+  }).sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  const runnerUp = ranked[1];
+  if (!best || best.overlap < 2 || best.score < 0.39 || best.queryCoverage < 0.34) return null;
+  if (runnerUp && best.score - runnerUp.score < 0.045 && best.questionCoverage < 0.65) return null;
+
+  return {
+    text: best.item.answer,
+    sources: best.item.sources.map((label) => ({ label })),
+    hasCaveat: best.item.hasCaveat,
+  };
+}
+
 function hasAny(query: string, terms: string[]) {
   return terms.some((term) => query.includes(normalize(term)));
 }
 
+function mentionsChannel(query: string, channel: { name: string; terms?: string[] }) {
+  return (channel.terms ?? [channel.name]).some((term) => query.includes(normalize(term)));
+}
+
+function curatedAnswerById(id: number): GroundedAnswer | null {
+  const item = CURATED_COCOON_QA.find((candidate) => candidate.id === id);
+  return item ? {
+    text: item.answer,
+    sources: item.sources.map((label) => ({ label })),
+    hasCaveat: item.hasCaveat,
+  } : null;
+}
+
 function channelProductAnswer(query: string): GroundedAnswer | null {
-  const mentionedChannels = channelProductMatrix.filter((item) => query.includes(normalize(item.channel)));
+  const mentionedChannels = channelProductMatrix.filter((item) => {
+    const channel = channels.find((candidate) => candidate.name === item.channel);
+    return channel ? mentionsChannel(query, channel) : query.includes(normalize(item.channel));
+  });
   const productIndices = productColumns
     .map((item, index) => item.terms.some((term) => query.includes(normalize(term))) ? index : -1)
     .filter((index) => index >= 0);
@@ -129,7 +237,7 @@ function channelProductAnswer(query: string): GroundedAnswer | null {
 }
 
 function channelChurnAnswer(query: string): GroundedAnswer {
-  const mentionedChannels = channels.filter((item) => query.includes(normalize(item.name)));
+  const mentionedChannels = channels.filter((item) => mentionsChannel(query, item));
   if (mentionedChannels.length > 0) {
     const detail = mentionedChannels
       .map((channel) => `${channel.name}: ${channel.churn} (${channel.churned}/${channel.sample} khách)`)
@@ -151,6 +259,32 @@ function tierAnswer(): GroundedAnswer {
   return {
     text: 'Trong bảng sạch, theo thứ tự Member / Bronze / Silver / Gold: số khách là 104 / 98 / 74 / 24; tỷ lệ churn là 72/104 (69,2%) / 29/98 (29,6%) / 23/74 (31,1%) / 12/24 (50%). CLV trung bình tương ứng là 657.702 / 1.429.398 / 2.626.095 / 4.981.333 đồng; CLV trung vị là 402.500 / 1.271.000 / 2.604.500 / 4.626.000 đồng. Đây là thống kê mô tả trên bộ dữ liệu mô phỏng.',
     sources: [sources.cleanedCustomers, sources.report],
+  };
+}
+
+function tierChurnAnswer(query: string): GroundedAnswer {
+  const selected = loyaltyTierChurn.filter((tier) => query.includes(normalize(tier.name)));
+  const rows = (selected.length ? selected : loyaltyTierChurn).map((tier) =>
+    `${tier.name}: ${tier.rate} (${tier.churned}/${tier.sample})`,
+  );
+  return {
+    text: `Tỷ lệ churn theo hạng trong bảng sạch: ${rows.join('; ')}. Cao nhất là Member (69,2%); thấp nhất là Bronze (29,6%). Đây là so sánh mô tả trên dữ liệu mô phỏng, không tự giải thích nguyên nhân khác biệt.`,
+    sources: [sources.cleanedCustomers, sources.report],
+    hasCaveat: true,
+  };
+}
+
+function tierRetentionAnswer(query: string): GroundedAnswer {
+  const selected = loyaltyTierChurn.filter((tier) => query.includes(normalize(tier.name)));
+  const rows = (selected.length ? selected : loyaltyTierChurn).map((tier) => {
+    const active = tier.sample - tier.churned;
+    const rate = (active / tier.sample * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+    return `${tier.name}: ${rate}% (${active}/${tier.sample} còn active)`;
+  });
+  return {
+    text: `Tỷ lệ còn hoạt động trong mẫu theo hạng: ${rows.join('; ')}. Đây là phần bổ sung 100% − tỷ lệ churn theo cờ churned trong workbook; dữ liệu mô phỏng này không cho biết nguyên nhân giữ chân.`,
+    sources: [sources.cleanedCustomers],
+    hasCaveat: true,
   };
 }
 
@@ -181,18 +315,123 @@ function favoriteCategoryAnswer(): GroundedAnswer {
   };
 }
 
+const workbookDistributions = {
+  gender: 'Nữ 262 (87,3%), nam 29 (9,7%), nhóm Other 9 (3,0%).',
+  city: 'TP. Hồ Chí Minh 109 (36,3%), Hà Nội 75 (25,0%), Other 44 (14,7%), Đà Nẵng 22 (7,3%), Cần Thơ 15 (5,0%), Hải Phòng 15 (5,0%), Nha Trang 11 (3,7%), Huế 9 (3,0%).',
+  skin: 'Da dầu 83 (27,7%), da hỗn hợp 81 (27,0%), da nhạy cảm 65 (21,7%), da khô 52 (17,3%), da thường 19 (6,3%).',
+  concern: 'Mụn 85 (28,3%), xỉn màu 64 (21,3%), mất nước 58 (19,3%), lão hóa 37 (12,3%), đỏ da 30 (10,0%), tăng sắc tố 26 (8,7%).',
+  firstProduct: 'Sản phẩm mua đầu tiên: Kem dưỡng 56, Sữa rửa mặt 53, Serum 37, Chống nắng 34, Dưỡng môi 33, Toner 32, Dưỡng thể 31, Mặt nạ 24.',
+  preferredChannel: 'Kênh ưu tiên được ghi trong hồ sơ: Marketplace 111, Website 105, In-store 46, App 38. Đây là preferred_channel, khác với kênh thu hút khách hàng lần đầu.',
+};
+
+function workbookProfileAnswer(query: string): GroundedAnswer | null {
+  if (hasAny(query, ['do tuoi', 'tuoi trung binh', 'age'])) {
+    return {
+      text: 'Trong 300 hồ sơ mô phỏng, tuổi trung bình là 28,8; trung vị 28; nhỏ nhất 18 và lớn nhất 49. Đây là mô tả mẫu, không đại diện cho toàn bộ khách hàng Cocoon ngoài đời.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['gioi tinh', 'gender'])) {
+    return { text: workbookDistributions.gender, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['thanh pho', 'city', 'khu vuc'])) {
+    return { text: workbookDistributions.city, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['loai da', 'skin type', 'da dau', 'da kho', 'da hon hop', 'da nhay cam', 'da thuong'])) {
+    return { text: workbookDistributions.skin, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['van de da', 'moi quan tam', 'main concern', 'mun', 'xi mau', 'mat nuoc', 'lao hoa', 'do da', 'tang sac to'])) {
+    return { text: workbookDistributions.concern, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['san pham mua dau', 'san pham don dau', 'first product'])) {
+    return { text: workbookDistributions.firstProduct, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['kenh uu tien', 'preferred channel', 'kenh thuong dung'])) {
+    return { text: workbookDistributions.preferredChannel, sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['so don', 'tan suat mua', 'num orders', 'mua bao nhieu don'])) {
+    return {
+      text: 'Trong 300 hồ sơ mô phỏng, số đơn trung bình là 2,99; trung vị 2; dao động từ 1 đến 12 đơn (phân vị 90 là 7 đơn). Đây là thống kê mô tả, không chứng minh nguyên nhân tạo CLV cao.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['gia tri don hang trung binh', 'average order value', 'aov'])) {
+    return {
+      text: 'Trường avg_order_value_vnd trong workbook có trung bình 397.520 đồng và trung vị 370.500 đồng trên 300 hồ sơ. Đây là giá trị đơn hàng trung bình theo hồ sơ; không đồng nghĩa với doanh thu đã được kiểm toán.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['tong chi tieu', 'chi tieu tron doi', 'total spend', 'tong spend'])) {
+    return {
+      text: 'Workbook ghi tổng total_spend_vnd của 300 hồ sơ là 354.821.000 đồng; trung bình mỗi hồ sơ 1.182.737 đồng và trung vị 836.500 đồng. Đây là trường chi tiêu tích lũy trong bộ dữ liệu mô phỏng, không phải báo cáo doanh thu kế toán của Cocoon.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['don hang giam gia', 'dung giam gia don dau', 'first order discount'])) {
+    return {
+      text: 'Có 138/300 hồ sơ (46,0%) ghi nhận đơn đầu có giảm giá; 162 hồ sơ (54,0%) không có. Dữ liệu này chỉ cho biết có dùng giảm giá ở đơn đầu, không đo tác động của giảm giá lên churn hay lợi nhuận.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['mua combo', 'bundle', 'bo san pham'])) {
+    return {
+      text: 'Có 58/300 hồ sơ (19,3%) được đánh dấu đã mua bundle/kit. Bảng không có đối chứng để kết luận bundle làm tăng CLV hoặc giữ chân.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  if (hasAny(query, ['email subscriber', 'dang ky email', 'nhan email'])) {
+    return { text: 'Có 197/300 hồ sơ (65,7%) đồng ý nhận email; 103 hồ sơ (34,3%) không đăng ký.', sources: [sources.cleanedCustomers] };
+  }
+  if (hasAny(query, ['danh gia', 'review', 'nhan xet'])) {
+    return {
+      text: 'Có 166/300 hồ sơ có ít nhất một review (300 trừ 134 hồ sơ review_count = 0). Workbook không ghi nội dung review, nên không thể suy ra chủ đề hài lòng hay phàn nàn từ con số này.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
+  return null;
+}
+
 export function answerCocoonQuestion(input: string): GroundedAnswer {
   const query = normalize(input);
+  const exactCuratedAnswer = CURATED_COCOON_QA.find(
+    (item) => retrievalText(item.question) === retrievalText(input),
+  );
+  if (exactCuratedAnswer) {
+    return {
+      text: exactCuratedAnswer.answer,
+      sources: exactCuratedAnswer.sources.map((label) => ({ label })),
+      hasCaveat: exactCuratedAnswer.hasCaveat,
+    };
+  }
+
   const asksDataProvenance = hasAny(query, ['du lieu thuc te', 'du lieu that', 'khach hang that', 'synthetic', 'fictional', 'du lieu gia lap', 'nguon du lieu']);
   const asksLoss = hasAny(query, ['thiet hai', 'mat bao nhieu', 'that thoat', 'doanh thu mat', 'mat doanh thu', '55 56', 'tong clv gold roi']);
   const asksSubscription = hasAny(query, ['subscription', 'dang ky dinh ky', 'goi dang ky']);
-  const asksChurn = hasAny(query, ['churn', 'roi bo', 'ty le roi', 'ty le churn']);
+  const asksRetentionRate = hasAny(query, ['ty le giu chan', 'giu chan bao nhieu', 'retention rate', 'ty le duy tri', 'con hoat dong bao nhieu', 'active rate', 'ti le retention']);
+  const asksChurn = hasAny(query, ['churn', 'roi bo', 'ty le roi', 'ty le churn', 'mat khach', 'quay lai', 'customer attrition']);
   const asksThreshold = hasAny(query, ['180 ngay', 'nguong churn', 'moc churn', 'tieu chi churn', 'dinh nghia churn', 'bao lau khong mua']);
   const asksChannelProduct = hasAny(query, ['kenh', 'marketplace', 'instagram', 'tiktok', 'referral', 'search ads', 'in store', 'influencer']) &&
     hasAny(query, ['san pham', 'product', 'nhom', 'category', 'danh muc', 'duong the', 'sua rua mat', 'duong moi', 'mat na', 'kem duong', 'serum', 'chong nang', 'toner', 'heatmap']);
   const asksWhy = hasAny(query, ['tai sao', 'vi sao', 'nguyen nhan', 'why', 'cause', 'ly do']);
   const asksFavoriteCategory = hasAny(query, ['ua chuong', 'yeu thich', 'pho bien', 'popular', 'favorite', 'nhieu nhat']) &&
     hasAny(query, ['san pham', 'product', 'nhom', 'category', 'danh muc']);
+  const asksRevenueShare = hasAny(query, ['ty trong doanh so', 'doanh so theo nhom', 'ty le doanh thu', 'product revenue', 'ty trong san pham']);
+
+  if (asksRetentionRate && !asksWhy) {
+    if (hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien'])) return tierRetentionAnswer(query);
+    return {
+      text: 'Trong 300 hồ sơ mô phỏng, 164 khách còn active (54,7%) và 136 khách được đánh dấu churn (45,3%). Theo định nghĩa workbook, active là chưa vượt quá 180 ngày không mua; đây là tỷ lệ mô tả của mẫu, không chứng minh hiệu quả của một chiến dịch giữ chân.',
+      sources: [sources.cleanedCustomers],
+      hasCaveat: true,
+    };
+  }
 
   if (asksDataProvenance) {
     return {
@@ -200,6 +439,50 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
       sources: [sources.cleanedCustomers, sources.dashboard],
       hasCaveat: true,
     };
+  }
+
+  const profileAnswer = workbookProfileAnswer(query);
+  if (profileAnswer) return profileAnswer;
+
+  if (hasAny(query, ['nguong gold', 'dieu kien gold', '4,5 trieu', 'tieu chi gold']) && hasAny(query, ['don', 'tan suat', 'clv'])) {
+    const tierPolicy = curatedAnswerById(25);
+    if (tierPolicy) return tierPolicy;
+  }
+
+  if (hasAny(query, ['search ads', 'quang cao tim kiem']) && hasAny(query, ['ngan sach', 'budget', 'scale', 'nen tang'])) {
+    const recommendation = curatedAnswerById(30);
+    if (recommendation) return recommendation;
+  }
+
+  if (hasAny(query, ['search ads', 'quang cao tim kiem']) && mentionsChannel(query, channels[0]) &&
+    (asksWhy || (hasAny(query, ['giu chan']) && !asksChurn))) {
+    const comparison = curatedAnswerById(19);
+    if (comparison) return comparison;
+  }
+
+  if (mentionsChannel(query, channels[0]) && asksChurn && hasAny(query, ['giai phap', 'xu ly', 'khac phuc', 'nen lam', 'de xuat'])) {
+    const referralRecommendation = curatedAnswerById(29);
+    if (referralRecommendation) return referralRecommendation;
+  }
+
+  if (asksRevenueShare && hasAny(query, ['cross sell', 'cross-sell', 'combo', 'ke hoach', 'xac nhan'])) {
+    const conflictAnswer = curatedAnswerById(33);
+    if (conflictAnswer) return conflictAnswer;
+  }
+
+  if (hasAny(query, ['chan dung', 'khac nhau ra sao']) && hasAny(query, ['marketplace']) && hasAny(query, ['instagram'])) {
+    const personaAnswer = curatedAnswerById(32);
+    if (personaAnswer) return personaAnswer;
+  }
+
+  if (hasAny(query, ['dong deu', 'deu nhat']) && hasAny(query, ['kenh', 'san pham', 'nhom', 'danh muc', 'ma tran'])) {
+    const evennessAnswer = curatedAnswerById(18);
+    if (evennessAnswer) return evennessAnswer;
+  }
+
+  if (hasAny(query, ['tren tung kenh', 'moi kenh', 'tung kenh']) && hasAny(query, ['san pham', 'nhom', 'category'])) {
+    const perChannelAnswer = curatedAnswerById(17);
+    if (perChannelAnswer) return perChannelAnswer;
   }
 
   if (asksLoss && hasAny(query, ['gold'])) {
@@ -354,6 +637,13 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
     };
   }
 
+  if (asksChurn && channels.some((channel) => mentionsChannel(query, channel))) {
+    return channelChurnAnswer(query);
+  }
+
+  const closestAnswer = findClosestCuratedAnswer(input);
+  if (closestAnswer) return closestAnswer;
+
   if (hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien']) && hasAny(query, ['clv', 'trung vi', 'trung binh', 'mean', 'average', 'gia tri', 'khach'])) {
     return tierAnswer();
   }
@@ -369,10 +659,22 @@ export function answerCocoonQuestion(input: string): GroundedAnswer {
   }
 
   if (asksChurn && hasAny(query, ['gold', 'bronze', 'silver', 'member', 'hang thanh vien'])) {
-    return tierAnswer();
+    return tierChurnAnswer(query);
   }
 
   if (asksChurn) return channelChurnAnswer(query);
+
+  if (hasAny(query, ['bien dao dong', 'khoang bien dong', 'spread', 'range']) &&
+    hasAny(query, ['clv', 'gold', 'bronze', 'silver', 'member', 'hang thanh vien', 'rong nhat'])) {
+    const item = CURATED_COCOON_QA.find((candidate) => candidate.id === 14);
+    if (item) {
+      return {
+        text: item.answer,
+        sources: item.sources.map((label) => ({ label })),
+        hasCaveat: item.hasCaveat,
+      };
+    }
+  }
 
   if (hasAny(query, ['recency', 'tu lan mua cuoi', 'tuong quan', 'nhan qua'])) {
     return {

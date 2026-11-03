@@ -81,6 +81,14 @@ test('Cocoon chatbot corpus has complete, unique, source-linked entries', () => 
     assert.ok(item.answer.trim().length > 40, `Answer ${item.id} is too short`);
     assert.ok(item.sources.length > 0, `Question ${item.id} has no source`);
   });
+
+  // Every source question must remain answerable through the same free-text path
+  // used by visitors, not only through the curated-question selector.
+  CURATED_COCOON_QA.forEach((item) => {
+    const answer = answerCocoonQuestion(item.question);
+    assert.ok(answer.sources.length > 0, `Question ${item.id} is not reachable in free-text lookup`);
+    assert.equal(answer.text, item.answer, `Question ${item.id} did not return its reviewed answer`);
+  });
 });
 
 test('Cocoon chatbot free questions answer from verified figures and flag source limits', () => {
@@ -122,4 +130,48 @@ test('Cocoon chatbot free questions answer from verified figures and flag source
   const unsupported = answerCocoonQuestion('Doanh thu Cocoon năm 2026 là bao nhiêu?');
   assert.equal(unsupported.sources.length, 0);
   assert.match(unsupported.text, /chưa khớp với nội dung đã đối chiếu/);
+
+  const paraphrased = answerCocoonQuestion('Mùa vụ có lặp lại qua các quý không?');
+  assert.match(paraphrased.text, /12 quý chưa đủ để khẳng định mùa vụ dài hạn/);
+  assert.ok(paraphrased.sources.length > 0);
+});
+
+test('Cocoon chatbot answers paraphrases from the source corpus and separates unsupported metrics', () => {
+  const referral = answerCocoonQuestion('Kênh giới thiệu có tỷ lệ mất khách bao nhiêu?');
+  assert.match(referral.text, /Referral.*63,6%/);
+  assert.ok(referral.sources.length > 0);
+
+  const tierRetention = answerCocoonQuestion('Tỷ lệ giữ chân của hạng Gold và Member thế nào?');
+  assert.match(tierRetention.text, /Gold: 50% \(12\/24 còn active\)/);
+  assert.match(tierRetention.text, /Member: 30,8% \(32\/104 còn active\)/);
+
+  const referralParaphrase = answerCocoonQuestion('Kênh giới thiệu có tỷ lệ mất khách bao nhiêu?');
+  assert.match(referralParaphrase.text, /Referral: 63,6% \(14\/22 khách\)/);
+
+  const unsupportedRevenue = answerCocoonQuestion('Doanh thu thực tế năm 2026 theo kênh là bao nhiêu?');
+  assert.equal(unsupportedRevenue.sources.length, 0);
+
+  const goldSpread = answerCocoonQuestion('Hạng nào có biên dao động CLV rộng nhất?');
+  assert.match(goldSpread.text, /Gold có khoảng biến động rộng nhất/);
+  assert.match(goldSpread.text, /không phải phương sai/);
+
+  const demographics = answerCocoonQuestion('Khách Cocoon chủ yếu có loại da nào?');
+  assert.match(demographics.text, /Da dầu 83/);
+  assert.ok(demographics.sources.some((source) => source.label.includes('cleaned.xlsx')));
+
+  const profit = answerCocoonQuestion('Doanh thu thực tế của Cocoon năm 2026 là bao nhiêu?');
+  assert.equal(profit.sources.length, 0);
+
+  const perChannel = answerCocoonQuestion('Sản phẩm nào được yêu thích nhiều nhất trên từng kênh?');
+  assert.match(perChannel.text, /TikTok — Toner \(9\)/);
+  assert.match(perChannel.text, /Influencer — Kem dưỡng và Chống nắng/);
+
+  const evenness = answerCocoonQuestion('Kênh nào phân bổ khách đều nhất theo danh mục?');
+  assert.match(evenness.text, /TikTok có mức phân bổ đều nhất/);
+
+  const searchPlan = answerCocoonQuestion('Có nên tăng ngân sách Search Ads và tập trung sản phẩm nào?');
+  assert.match(searchPlan.text, /Serum 9, Sữa rửa mặt 8 và Kem dưỡng 5/);
+
+  const revenueConflict = answerCocoonQuestion('Cross-sell theo tỷ trọng doanh số có thể xác nhận không?');
+  assert.match(revenueConflict.text, /Dashboard HTML hiển thị Serum 7%/);
 });
