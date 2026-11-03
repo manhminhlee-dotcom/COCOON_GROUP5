@@ -205,22 +205,22 @@ export function Chapter4Defense() {
         </div>
 
         {/* Khung tra cứu theo tài liệu (5 Cols) */}
-        <div className="lg:col-span-5 bg-[#3D2314] text-[#FAF6F0] p-4 sm:p-6 rounded-3xl border border-[#4A2E1B] shadow-xl flex flex-col justify-between min-h-[500px] lg:h-[540px]">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-[#4A2E1B] mb-3">
-              <div className="flex items-center gap-2">
+        <div className="lg:col-span-5 min-w-0 bg-[#3D2314] text-[#FAF6F0] p-4 sm:p-6 rounded-3xl border border-[#4A2E1B] shadow-xl flex min-h-[500px] flex-col lg:min-h-[540px]">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-[#4A2E1B] pb-3">
+              <div className="flex min-w-0 items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-[#E69F00] text-[#3D2314]">
                   <Sparkles className="w-4 h-4" />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-sm text-[#FAF6F0] leading-tight">Tra cứu theo tài liệu</h3>
                   <span className="text-xs text-[#E69F00]">Câu trả lời có nguồn đối chiếu</span>
                 </div>
               </div>
-              <span className="text-[11px] text-[#E5D9C5]">Tra cứu tại chỗ</span>
+              <span className="shrink-0 text-[11px] text-[#E5D9C5]">Tra cứu tại chỗ</span>
             </div>
 
-            <div ref={setChatLogRef} role="log" aria-label="Lịch sử trò chuyện Cocoon" aria-live="polite" aria-relevant="additions" className="space-y-3 overflow-y-auto h-[350px] pr-2 text-sm">
+            <div ref={setChatLogRef} role="log" aria-label="Lịch sử trò chuyện Cocoon" aria-live="polite" aria-relevant="additions" className="min-h-[200px] flex-1 space-y-3 overflow-y-auto overscroll-contain pr-2 text-sm">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
@@ -249,9 +249,9 @@ export function Chapter4Defense() {
 
           <form
             onSubmit={(event) => { event.preventDefault(); handleSendChat(); }}
-            className="pt-3 border-t border-[#4A2E1B]"
+            className="mt-3 w-full min-w-0 shrink-0 border-t border-[#4A2E1B] pt-3"
           >
-            <div>
+            <div className="w-full min-w-0">
               <select
                 value={selectedQuestion}
                 onChange={(event) => {
@@ -267,7 +267,7 @@ export function Chapter4Defense() {
                 }}
                 aria-label="Chọn câu hỏi gợi ý về tài liệu Cocoon"
                 aria-describedby="cocoon-chat-scope"
-                className="mb-2 min-h-[44px] w-full bg-[#2C1810] border border-[#765238] rounded-xl px-3 py-2 text-xs text-[#FAF6F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
+                className="mb-2 block min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[#765238] bg-[#2C1810] px-3 py-2 text-xs text-[#FAF6F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E69F00]"
               >
                 <option value="">Câu hỏi gợi ý (không bắt buộc)…</option>
                 <optgroup label={`${GROUP_DOCUMENT_QUESTIONS.length} câu hỏi từ tài liệu nhóm`}>
@@ -286,7 +286,7 @@ export function Chapter4Defense() {
                   ))}
                 </optgroup>
               </select>
-              <div className="flex gap-2">
+              <div className="flex w-full min-w-0 gap-2">
                 <input
                   type="text"
                   value={draftQuestion}
@@ -311,7 +311,7 @@ export function Chapter4Defense() {
               </button>
               </div>
             </div>
-            <div id="cocoon-chat-scope" className="mt-2 text-[11px] leading-relaxed text-[#E5D9C5]">
+            <div id="cocoon-chat-scope" className="mt-2 break-words text-[11px] leading-relaxed text-[#E5D9C5]">
               Có thể gõ tự do hoặc chọn câu gợi ý. Chatbot chỉ tra cứu nội dung Cocoon đã nạp; câu ngoài phạm vi hoặc thiếu dữ liệu sẽ được báo rõ. Số liệu có nguồn, còn giả thuyết và khuyến nghị được ghi riêng.
             </div>
           </form>

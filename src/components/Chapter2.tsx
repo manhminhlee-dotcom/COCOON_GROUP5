@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, ExternalLink } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { QUARTER_DATA } from '../data/mockData';
 
 export function Chapter2() {
@@ -107,55 +107,6 @@ export function Chapter2() {
         </div>
       </div>
 
-      {/* Khung So Sánh H1/2026: Q1 vs Q2 (Cam Consumer Netlify Benchmark) */}
-      <div className="bg-[#3D2314] text-[#FAF6F0] rounded-3xl p-6 sm:p-8 border border-[#4A2E1B] shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-widest text-[#E69F00] bg-[#2C1810] px-3 py-1 rounded-full border border-[#E69F00]/30">
-              Đối Chuẩn Thị Trường · Cam Consumer H1/2026
-            </span>
-            <h3 className="text-xl sm:text-2xl font-bold font-serif text-[#FAF6F0] mt-2">
-              So Sánh Kết Quả Kinh Doanh Quý 1 vs Quý 2 (2026)
-            </h3>
-          </div>
-          <a
-            href="https://lustrous-licorice-891659.netlify.app/#cold-calling"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#E69F00] text-[#3D2314] text-xs font-bold hover:bg-[#F5A623] transition-colors self-start sm:self-center"
-          >
-            <span>Xem Netlify Report</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 my-5 text-center">
-          <div className="bg-[#2C1810] p-4 rounded-2xl border border-[#4A2E1B]">
-            <span className="text-xs text-[#E5D9C5] block font-medium">Tổng Doanh Thu H1</span>
-            <strong className="text-2xl font-black text-[#E69F00] font-mono">99.24 Tỷ đ</strong>
-            <span className="text-[10px] text-emerald-400 block mt-1">Đạt 104% kế hoạch kỳ</span>
-          </div>
-          <div className="bg-[#2C1810] p-4 rounded-2xl border border-[#4A2E1B]">
-            <span className="text-xs text-[#E5D9C5] block font-medium">Tổng Chi Phí H1</span>
-            <strong className="text-2xl font-black text-[#FAF6F0] font-mono">70.17 Tỷ đ</strong>
-            <span className="text-[10px] text-[#E5D9C5] block mt-1">Kiểm soát COGS & MKT</span>
-          </div>
-          <div className="bg-[#2C1810] p-4 rounded-2xl border border-[#4A2E1B]">
-            <span className="text-xs text-[#E5D9C5] block font-medium">Lợi Nhuận Trước Thuế</span>
-            <strong className="text-2xl font-black text-emerald-400 font-mono">29.07 Tỷ đ</strong>
-            <span className="text-[10px] text-emerald-400 block mt-1">Vượt 8.2% cùng kỳ</span>
-          </div>
-          <div className="bg-[#2C1810] p-4 rounded-2xl border border-[#4A2E1B]">
-            <span className="text-xs text-[#E5D9C5] block font-medium">Biên Lợi Nhuận Ròng</span>
-            <strong className="text-2xl font-black text-[#E69F00] font-mono">29.3%</strong>
-            <span className="text-[10px] text-[#E5D9C5] block mt-1">Tỷ suất sinh lời cao</span>
-          </div>
-        </div>
-
-        <p className="text-xs text-[#E5D9C5] leading-relaxed">
-          Số liệu đối chuẩn cho thấy Cocoon Vietnam đóng góp trực tiếp vào chuỗi phân phối mỹ phẩm thiên nhiên, với sự ổn định qua từng quý và tỷ suất lợi nhuận biên thuộc top đầu phân khúc chăm sóc cá nhân (Personal Care).
-        </p>
-      </div>
     </div>
   );
 }
