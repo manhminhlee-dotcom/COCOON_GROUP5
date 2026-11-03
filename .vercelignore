@@ -1,0 +1,10 @@
+work/
+dist/
+.aistudio/
+.taste-skill/
+docs/
+qa/
+tools/
+.github/
+reader_check_*.png
+scene_check*.png
